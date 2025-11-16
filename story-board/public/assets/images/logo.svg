@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Film strip icon -->
+  <rect x="8" y="12" width="36" height="36" rx="4" fill="url(#logoGradient)"/>
+  <rect x="12" y="16" width="4" height="4" fill="white" opacity="0.9"/>
+  <rect x="20" y="16" width="4" height="4" fill="white" opacity="0.9"/>
+  <rect x="28" y="16" width="4" height="4" fill="white" opacity="0.9"/>
+  <rect x="36" y="16" width="4" height="4" fill="white" opacity="0.9"/>
+  
+  <rect x="12" y="24" width="28" height="16" rx="2" fill="white" opacity="0.95"/>
+  <rect x="14" y="26" width="24" height="12" rx="1" fill="url(#logoGradient)" opacity="0.8"/>
+  
+  <rect x="12" y="44" width="4" height="4" fill="white" opacity="0.9"/>
+  <rect x="20" y="44" width="4" height="4" fill="white" opacity="0.9"/>
+  <rect x="28" y="44" width="4" height="4" fill="white" opacity="0.9"/>
+  <rect x="36" y="44" width="4" height="4" fill="white" opacity="0.9"/>
+  
+  <!-- Text -->
+  <text x="56" y="28" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1a1a1a">
+    Cine
+  </text>
+  <text x="56" y="48" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="url(#logoGradient)">
+    Core
+  </text>
+</svg>
