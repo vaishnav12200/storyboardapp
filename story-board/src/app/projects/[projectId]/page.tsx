@@ -80,7 +80,11 @@ const ProjectOverviewPage = () => {
     },
     {
       title: 'Budget',
-      value: project.budget ? formatCurrency(project.budget) : 'Not set',
+      value: (() => {
+        if (!project.budget?.total && project.budget?.total !== 0) return 'Not set';
+        const budgetTotal = project.budget.total;
+        return isNaN(budgetTotal) ? 'Not set' : formatCurrency(budgetTotal);
+      })(),
       icon: DollarSign,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
@@ -175,17 +179,6 @@ const ProjectOverviewPage = () => {
             {project.description && (
               <p className="text-lg text-gray-600 max-w-3xl">{project.description}</p>
             )}
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="outline" className="flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Settings
-            </Button>
-            <Button variant="outline" className="flex items-center gap-2">
-              <Edit className="w-4 h-4" />
-              Edit Project
-            </Button>
           </div>
         </motion.div>
 

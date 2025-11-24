@@ -8,7 +8,10 @@ export interface Project {
   status: 'development' | 'pre-production' | 'production' | 'post-production' | 'completed';
   startDate?: string;
   endDate?: string;
-  budget?: number;
+  budget?: {
+    total: number;
+    currency: string;
+  };
   createdBy: string;
   collaborators: string[];
   createdAt: string;
@@ -23,7 +26,7 @@ export interface CreateProjectData {
   genre?: string;
   startDate?: string;
   endDate?: string;
-  budget?: number;
+  budget?: number; // This will be converted to budget.total on the backend
 }
 
 export interface UpdateProjectData extends Partial<CreateProjectData> {

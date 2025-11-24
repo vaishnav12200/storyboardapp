@@ -69,7 +69,17 @@ const DashboardPage = () => {
     totalProjects: projects.length,
     activeProjects: projects.filter(p => p.status === 'production' || p.status === 'pre-production').length,
     completedProjects: projects.filter(p => p.status === 'completed').length,
-    totalBudget: projects.reduce((sum, p) => sum + (p.budget || 0), 0),
+    totalBudget: projects.reduce((sum, p) => {
+      // Handle the budget.total structure from the backend
+      let budget = 0;
+      if (p.budget?.total && typeof p.budget.total === 'number' && !isNaN(p.budget.total)) {
+        budget = p.budget.total;
+      } else if (typeof p.budget === 'number' && !isNaN(p.budget)) {
+        // Fallback for simple budget number
+        budget = p.budget;
+      }
+      return sum + budget;
+    }, 0),
   };
 
   const recentProjects = projects.slice(0, 3);
@@ -120,7 +130,11 @@ const DashboardPage = () => {
         </motion.div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="stats-grid mb-8" style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: '1.5rem'
+        }}>
           {[
             {
               title: 'Total Projects',
@@ -142,7 +156,7 @@ const DashboardPage = () => {
             },
             {
               title: 'Total Budget',
-              value: formatCurrency(stats.totalBudget),
+              value: isNaN(stats.totalBudget) ? '$0.00' : formatCurrency(stats.totalBudget),
               icon: DollarSign,
               color: 'from-orange-500 to-orange-600',
               isPrice: true
@@ -155,17 +169,18 @@ const DashboardPage = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1, duration: 0.5 }}
+                className="w-full"
               >
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden h-full">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
+                        <p className="text-2xl lg:text-3xl font-bold text-gray-900">
                           {stat.isPrice ? stat.value : stat.value.toLocaleString()}
                         </p>
                       </div>
-                      <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center`}>
+                      <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center flex-shrink-0 ml-4`}>
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                     </div>
