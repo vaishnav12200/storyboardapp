@@ -233,6 +233,7 @@ router.post('/', createProjectValidation, async (req, res) => {
       data: project
     });
   } catch (error) {
+    console.error('Project creation error:', error);
     res.status(400).json({
       success: false,
       message: error.message

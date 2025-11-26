@@ -1,6 +1,7 @@
 const Project = require('../models/Project');
 const Scene = require('../models/Scene');
 const { validationResult } = require('express-validator');
+const aiService = require('../services/aiService');
 
 class StoryboardController {
   // Generate AI image for storyboard panel
@@ -9,13 +10,16 @@ class StoryboardController {
       const { sceneId, panelId } = req.params;
       const {
         prompt,
-        provider = 'openai',
+        provider = 'auto',
         style = 'realistic-sketch',
         aspectRatio = '16:9',
         mood = 'neutral',
         enhancePrompt = true,
         saveAlternative = false
       } = req.body;
+      
+      // Auto-select provider based on user
+      const actualProvider = provider === 'auto' ? aiService.selectBestProvider(req.currentUser) : provider;
 
       const scene = await Scene.findById(sceneId).populate('project');
       if (!scene) {
@@ -43,7 +47,6 @@ class StoryboardController {
       }
 
       // Generate AI image
-      const aiService = require('../services/aiService');
       
       console.log('🎨 Starting AI image generation for panel:', panelId);
       console.log('📝 Prompt:', prompt);
@@ -51,21 +54,21 @@ class StoryboardController {
       console.log('🎭 Style:', style);
       
       const generationOptions = {
-        provider,
+        provider: actualProvider,
         style,
         shotType: panel.shotType,
         cameraMovement: panel.cameraMovement,
         aspectRatio,
         mood,
-        location: scene.location,
-        timeOfDay: scene.location?.timeOfDay,
-        characters: scene.characters,
+        location: scene.location && scene.location.name ? scene.location : null,
+        timeOfDay: scene.location?.timeOfDay || null,
+        characters: scene.characters || [],
         enhancePrompt
       };
 
       console.log('🔧 Generation options:', JSON.stringify(generationOptions, null, 2));
 
-      const result = await aiService.generateStoryboardImage(prompt, generationOptions);
+      const result = await aiService.generateStoryboardImage(prompt, generationOptions, req.currentUser);
 
       console.log('📊 AI Service Result:', JSON.stringify(result, null, 2));
 
@@ -78,6 +81,18 @@ class StoryboardController {
           error: result.error || 'Unknown error'
         });
       }
+
+      // Validate that we got a proper image URL
+      if (!result.data.imageUrl) {
+        console.error('❌ No image URL returned from AI service');
+        return res.status(500).json({
+          success: false,
+          message: 'AI generation completed but no image URL was returned',
+          provider: result.data.provider
+        });
+      }
+
+      console.log('🖼️ Generated image URL:', result.data.imageUrl);
 
       // Save previous generation if keeping alternatives
       if (saveAlternative && panel.image && panel.imageSource?.type === 'ai-generated') {
@@ -102,6 +117,7 @@ class StoryboardController {
           originalPrompt: result.data.originalPrompt,
           enhancedPrompt: result.data.prompt,
           generationId: result.data.generationId,
+          originalImageUrl: result.data.imageUrl,
           settings: {
             style,
             aspectRatio,
@@ -118,23 +134,27 @@ class StoryboardController {
       panel.lastModified = new Date();
       scene.lastModifiedBy = req.user.userId;
       
+      console.log('💾 Saving panel with original image URL:', result.data.imageUrl);
       await scene.save();
+      console.log('✅ Panel saved successfully');
 
       await scene.populate('lastModifiedBy', 'firstName lastName email');
 
       res.status(200).json({
         success: true,
-        message: 'Panel image generated successfully',
         data: {
+          imageUrl: result.data.imageUrl,
           panel: panel,
           generationDetails: result.data,
           sceneId: scene._id
         }
       });
     } catch (error) {
+      console.error('❌ AI Generation Error:', error);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: error.message,
+        error: error.stack
       });
     }
   }

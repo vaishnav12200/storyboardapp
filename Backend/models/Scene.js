@@ -76,7 +76,7 @@ const sceneSchema = new mongoose.Schema({
         aiGeneration: {
           provider: {
             type: String,
-            enum: ['openai', 'stability', 'replicate']
+            enum: ['openai', 'stability', 'replicate', 'pollinations', 'huggingface', 'craiyon']
           },
           originalPrompt: String,
           enhancedPrompt: String,
@@ -273,13 +273,11 @@ const sceneSchema = new mongoose.Schema({
 });
 
 // Indexes for better query performance
-sceneSchema.index({ project: 1, sceneNumber: 1 });
+// Compound unique index to prevent duplicate scene numbers in same project
+sceneSchema.index({ project: 1, sceneNumber: 1 }, { unique: true });
 sceneSchema.index({ project: 1, status: 1 });
 sceneSchema.index({ project: 1, 'schedule.plannedDate': 1 });
 sceneSchema.index({ 'location.name': 1 });
-
-// Compound unique index to prevent duplicate scene numbers in same project
-sceneSchema.index({ project: 1, sceneNumber: 1 }, { unique: true });
 
 // Virtual for estimated total duration
 sceneSchema.virtual('totalEstimatedDuration').get(function() {
@@ -292,7 +290,7 @@ sceneSchema.virtual('shotCount').get(function() {
 });
 
 // Pre-save middleware to update panel count and last modified
-sceneSchema.pre('save', function(next) {
+sceneSchema.pre('save', function() {
   if (this.storyboard.panels) {
     this.storyboard.totalPanels = this.storyboard.panels.length;
   }
@@ -300,8 +298,6 @@ sceneSchema.pre('save', function(next) {
   if (this.isModified() && !this.isNew) {
     this.updatedAt = new Date();
   }
-  
-  next();
 });
 
 // Static method to get next scene number for a project

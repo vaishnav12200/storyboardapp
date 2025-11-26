@@ -102,6 +102,9 @@ const StoryboardPage = () => {
   const [newSceneDescription, setNewSceneDescription] = useState('');
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [editingPanel, setEditingPanel] = useState<StoryboardPanel | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Load user's actual storyboard data
   useEffect(() => {
@@ -111,43 +114,63 @@ const StoryboardPage = () => {
           const { storyboardApi } = await import('@/lib/api/storyboard');
           const result = await storyboardApi.getScenes(projectId);
           
+          console.log('API Response:', result);
+          console.log('result.data:', result.data);
+          console.log('result.data.scenes:', result.data?.scenes);
+          
           if (result.success && result.data) {
-            // Convert backend scenes to frontend format
-            const convertedScenes: Scene[] = result.data.map((backendScene: any) => ({
+            // Handle both paginated and direct array responses
+            const scenesArray = result.data.scenes || result.data;
+            console.log('scenesArray:', scenesArray);
+            
+            if (Array.isArray(scenesArray)) {
+              console.log('Processing scenes array:', scenesArray);
+              // Convert backend scenes to frontend format
+              const convertedScenes: Scene[] = scenesArray.map((backendScene: any) => {
+                console.log('Processing scene:', backendScene);
+                return {
               id: backendScene._id,
               sceneNumber: backendScene.sceneNumber,
               title: backendScene.title,
               description: backendScene.description,
               location: {
-                name: backendScene.location || 'Location',
-                type: backendScene.interior ? 'INT' : 'EXT',
-                timeOfDay: backendScene.timeOfDay?.toUpperCase() as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK' || 'DAY',
+                name: backendScene.location?.name || backendScene.location || 'Location',
+                type: backendScene.location?.type === 'exterior' ? 'EXT' : 'INT',
+                timeOfDay: (backendScene.location?.timeOfDay || backendScene.timeOfDay || 'day').toUpperCase() as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK',
               },
               storyboard: {
-                panels: backendScene.panels?.map((panel: any) => ({
+                panels: backendScene.storyboard?.panels?.map((panel: any) => ({
                   id: panel._id,
                   panelNumber: panel.panelNumber,
-                  image: panel.imageUrl,
+                  image: panel.image,
                   imageSource: panel.imageSource,
                   description: panel.description,
                   shotType: panel.shotType || 'medium-shot',
-                  cameraMovement: panel.cameraAngle || 'static',
-                  angle: 'eye-level',
+                  cameraMovement: panel.cameraMovement || 'static',
+                  angle: panel.angle || 'eye-level',
                   duration: panel.duration,
                   notes: panel.notes,
                 })) || [],
-                totalPanels: backendScene.panels?.length || 0,
+                totalPanels: backendScene.storyboard?.panels?.length || 0,
               },
-            }));
+            };
+              });
+              
+              console.log('Converted scenes:', convertedScenes);
             
-            setScenes(convertedScenes);
-            
-            // Select first scene if available
-            if (convertedScenes.length > 0) {
-              setSelectedSceneId(convertedScenes[0].id);
+              // Temporarily disable to prevent crash
+              setScenes([]);
+              
+              // Select first scene if available
+              if (convertedScenes.length > 0) {
+                setSelectedSceneId(convertedScenes[0].id);
+              }
+            } else {
+              console.log('Scenes data is not an array:', scenesArray);
+              setScenes([]);
             }
           } else {
-            // No scenes yet, start with empty array
+            console.log('API call failed or no data:', result);
             setScenes([]);
           }
         } catch (error) {
@@ -163,6 +186,8 @@ const StoryboardPage = () => {
 
   const selectedScene = scenes.find(scene => scene.id === selectedSceneId);
   const selectedPanel = selectedScene?.storyboard.panels.find(panel => panel.id === selectedPanelId);
+
+
 
   const handleAddPanel = async () => {
     if (!selectedScene) {
@@ -194,11 +219,11 @@ const StoryboardPage = () => {
         const newPanel: StoryboardPanel = {
           id: result.data._id,
           panelNumber: result.data.panelNumber,
-          image: result.data.imageUrl,
+          image: result.data.image,
           description: result.data.description,
-          shotType: 'wide-shot',
-          cameraMovement: 'static',
-          angle: 'eye-level',
+          shotType: result.data.shotType || 'medium-shot',
+          cameraMovement: result.data.cameraMovement || 'static',
+          angle: result.data.angle || 'eye-level',
           duration: result.data.duration,
           notes: result.data.notes,
         };
@@ -295,7 +320,13 @@ const StoryboardPage = () => {
       setGenerationStep('Generation completed!');
 
       if (result.success && result.data?.imageUrl) {
-        // Update panel with new image
+        console.log('🎉 Image generation successful!');
+        console.log('🖼️ Image URL:', result.data.imageUrl);
+        console.log('📊 Generation details:', result.data.generationDetails);
+        
+        // Use the image URL from the response
+        const backendImageUrl = result.data.imageUrl || result.data.generationDetails?.imageUrl;
+        
         setScenes(scenes.map(scene => 
           scene.id === selectedSceneId
             ? {
@@ -306,7 +337,7 @@ const StoryboardPage = () => {
                     panel.id === selectedPanel.id 
                       ? { 
                           ...panel, 
-                          image: result.data.imageUrl,
+                          image: backendImageUrl,
                           imageSource: {
                             type: 'ai-generated',
                             provider: aiProvider,
@@ -328,6 +359,7 @@ const StoryboardPage = () => {
         setGenerationStep('');
         toast.success(`AI image generated successfully with ${aiProvider}!`);
       } else {
+        console.error('❌ Generation failed:', result);
         throw new Error(result.message || 'Generation failed');
       }
     } catch (error: any) {
@@ -398,19 +430,19 @@ const StoryboardPage = () => {
           title: result.data.title,
           description: result.data.description,
           location: {
-            name: result.data.location || 'New Location',
-            type: result.data.interior ? 'INT' : 'EXT',
-            timeOfDay: result.data.timeOfDay?.toUpperCase() as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK' || 'DAY',
+            name: result.data.location?.name || result.data.location || 'New Location',
+            type: result.data.location?.type === 'exterior' ? 'EXT' : 'INT',
+            timeOfDay: (result.data.location?.timeOfDay || result.data.timeOfDay || 'day').toUpperCase() as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK',
           },
           storyboard: {
-            panels: result.data.panels?.map((panel: any) => ({
+            panels: result.data.storyboard?.panels?.map((panel: any) => ({
               id: panel._id,
               panelNumber: panel.panelNumber,
-              image: panel.imageUrl,
+              image: panel.image,
               description: panel.description,
               shotType: panel.shotType || 'medium-shot',
-              cameraMovement: panel.cameraAngle || 'static',
-              angle: 'eye-level',
+              cameraMovement: panel.cameraMovement || 'static',
+              angle: panel.angle || 'eye-level',
               duration: panel.duration,
               notes: panel.notes,
             })) || [],
@@ -432,6 +464,33 @@ const StoryboardPage = () => {
       toast.error(`Failed to create scene: ${error.message}`);
     }
   };
+
+  // Keyboard navigation for preview
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!showPreview || !selectedScene) return;
+      
+      const panelsWithImages = selectedScene.storyboard.panels.filter(p => p.image);
+      
+      if (e.key === 'ArrowLeft' && currentPreviewIndex > 0 && !previewLoading) {
+        setPreviewLoading(true);
+        setCurrentPreviewIndex(currentPreviewIndex - 1);
+        setTimeout(() => setPreviewLoading(false), 800);
+      } else if (e.key === 'ArrowRight' && currentPreviewIndex < panelsWithImages.length - 1 && !previewLoading) {
+        setPreviewLoading(true);
+        setCurrentPreviewIndex(currentPreviewIndex + 1);
+        setTimeout(() => setPreviewLoading(false), 800);
+      } else if (e.key === 'Escape') {
+        setShowPreview(false);
+        setPreviewLoading(false);
+      }
+    };
+
+    if (showPreview) {
+      window.addEventListener('keydown', handleKeyPress);
+      return () => window.removeEventListener('keydown', handleKeyPress);
+    }
+  }, [showPreview, currentPreviewIndex, selectedScene, previewLoading]);
 
   if (isLoading) {
     return (
@@ -480,10 +539,21 @@ const StoryboardPage = () => {
               
               <Button
                 variant="outline"
-                leftIcon={isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                onClick={() => setIsPlaying(!isPlaying)}
+                leftIcon={<Play className="w-4 h-4" />}
+                onClick={() => {
+                  if (selectedScene && selectedScene.storyboard.panels.some(p => p.image)) {
+                    setPreviewLoading(true);
+                    setCurrentPreviewIndex(0);
+                    setShowPreview(true);
+                    // Force minimum loading time
+                    setTimeout(() => setPreviewLoading(false), 1000);
+                  } else {
+                    toast.error('No images to preview. Generate some AI images first.');
+                  }
+                }}
+                disabled={!selectedScene || !selectedScene.storyboard.panels.some(p => p.image)}
               >
-                {isPlaying ? 'Pause' : 'Preview'}
+                Preview
               </Button>
               
               <Button
@@ -528,7 +598,7 @@ const StoryboardPage = () => {
                         Scene {scene.sceneNumber}: {scene.title}
                       </h4>
                       <p className="text-sm text-gray-600 mt-1">
-                        {scene.location.type} - {scene.location.name} - {scene.location.timeOfDay}
+                        {scene.location?.type || 'INT'} - {scene.location?.name || 'Location'} - {scene.location?.timeOfDay || 'DAY'}
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
                         {scene.storyboard.totalPanels} panels
@@ -552,7 +622,7 @@ const StoryboardPage = () => {
                         Scene {selectedScene.sceneNumber}: {selectedScene.title}
                       </h2>
                       <p className="text-sm text-gray-600">
-                        {selectedScene.location.type} - {selectedScene.location.name} - {selectedScene.location.timeOfDay}
+                        {selectedScene.location?.type || 'INT'} - {selectedScene.location?.name || 'Location'} - {selectedScene.location?.timeOfDay || 'DAY'}
                       </p>
                     </div>
                     
@@ -633,6 +703,13 @@ const StoryboardPage = () => {
                                     src={panel.image}
                                     alt={`Panel ${panel.panelNumber}`}
                                     className="w-full h-full object-cover rounded-lg"
+                                    crossOrigin="anonymous"
+                                    onError={(e) => {
+                                      console.error('Image failed to load:', panel.image);
+                                    }}
+                                    onLoad={() => {
+                                      console.log('Image loaded successfully:', panel.image);
+                                    }}
                                   />
                                   {/* AI Generated Badge */}
                                   {panel.imageSource?.type === 'ai-generated' && (
@@ -708,6 +785,7 @@ const StoryboardPage = () => {
                                   src={panel.image}
                                   alt={`Panel ${panel.panelNumber}`}
                                   className="w-full h-full object-cover rounded-lg"
+                                  crossOrigin="anonymous"
                                 />
                               ) : (
                                 <div className="text-center">
@@ -1094,6 +1172,122 @@ const StoryboardPage = () => {
                 >
                   Save Changes
                 </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Preview Modal */}
+      <AnimatePresence>
+        {showPreview && selectedScene && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+            onClick={() => setShowPreview(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full h-full flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setShowPreview(false);
+                  setPreviewLoading(false);
+                }}
+                className="absolute top-4 right-4 z-10 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+              >
+                ×
+              </button>
+
+              {/* Navigation */}
+              <div className="absolute top-4 left-4 z-10 bg-black/50 text-white px-4 py-2 rounded-lg">
+                Panel {selectedScene.storyboard.panels.filter(p => p.image)[currentPreviewIndex]?.panelNumber || 1} of {selectedScene.storyboard.panels.filter(p => p.image).length}
+              </div>
+
+              {/* Previous Button */}
+              {!previewLoading && currentPreviewIndex > 0 && (
+                <button
+                  onClick={() => {
+                    setPreviewLoading(true);
+                    setCurrentPreviewIndex(currentPreviewIndex - 1);
+                    setTimeout(() => setPreviewLoading(false), 800);
+                  }}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 text-white p-3 rounded-full hover:bg-black/70 transition-colors"
+                >
+                  <SkipBack className="w-6 h-6" />
+                </button>
+              )}
+
+              {/* Next Button */}
+              {!previewLoading && currentPreviewIndex < selectedScene.storyboard.panels.filter(p => p.image).length - 1 && (
+                <button
+                  onClick={() => {
+                    setPreviewLoading(true);
+                    setCurrentPreviewIndex(currentPreviewIndex + 1);
+                    setTimeout(() => setPreviewLoading(false), 800);
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 text-white p-3 rounded-full hover:bg-black/70 transition-colors"
+                >
+                  <SkipForward className="w-6 h-6" />
+                </button>
+              )}
+
+              {/* Current Image with Loading */}
+              {(() => {
+                const panelsWithImages = selectedScene.storyboard.panels.filter(p => p.image);
+                const currentPanel = panelsWithImages[currentPreviewIndex];
+                return currentPanel ? (
+                  <div className="max-w-4xl max-h-[80vh] flex flex-col items-center relative">
+                    {/* Loading Animation */}
+                    {previewLoading && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 rounded-lg z-10">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                          className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full mb-4"
+                        />
+                        <p className="text-white text-lg">Loading preview...</p>
+                      </div>
+                    )}
+                    
+                    <img
+                      src={currentPanel.image}
+                      alt={`Panel ${currentPanel.panelNumber}`}
+                      className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                      crossOrigin="anonymous"
+                      onLoad={() => {}}
+                      onError={() => {}}
+                      style={{ opacity: previewLoading ? 0.3 : 1 }}
+                    />
+                    <div className="mt-4 bg-black/50 text-white px-6 py-3 rounded-lg max-w-2xl text-center">
+                      <h3 className="font-semibold mb-1">Panel {currentPanel.panelNumber}</h3>
+                      <p className="text-sm opacity-90">{currentPanel.description}</p>
+                      <div className="flex items-center justify-center gap-4 mt-2 text-xs opacity-75">
+                        <span>{currentPanel.shotType.replace('-', ' ')}</span>
+                        <span>•</span>
+                        <span>{currentPanel.cameraMovement}</span>
+                        {currentPanel.duration && (
+                          <>
+                            <span>•</span>
+                            <span>{currentPanel.duration}s</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Keyboard Navigation Hint */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded-lg text-sm">
+                Use ← → arrow keys or click buttons to navigate
               </div>
             </motion.div>
           </motion.div>

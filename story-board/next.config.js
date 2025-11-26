@@ -3,7 +3,8 @@ const path = require('path')
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['localhost', 'your-backend-domain.com', 'cloudinary.com', 's3.amazonaws.com'],
+    unoptimized: true,
+    domains: ['localhost', 'your-backend-domain.com', 'cloudinary.com', 's3.amazonaws.com', 'image.pollinations.ai'],
     remotePatterns: [
       {
         protocol: 'https',

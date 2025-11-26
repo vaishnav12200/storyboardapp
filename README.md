@@ -5,7 +5,8 @@ A comprehensive film production platform featuring AI-powered storyboard generat
 ## 🚀 Features
 
 - **Visual Storyboarding**: Create stunning storyboards with AI-powered image generation
-- **AI Image Generation**: Support for multiple AI providers (OpenAI DALL-E, Stability AI, Replicate)
+- **AI Image Generation**: Support for multiple AI providers (OpenAI DALL-E, Stability AI, Replicate, Pollinations)
+- **Real-time Image Preview**: Generated images display instantly
 - **Script Management**: Professional script writing and breakdown tools
 - **Budget Tracking**: Comprehensive budget management system
 - **Location Scouting**: Location management with Google Maps integration
@@ -43,7 +44,7 @@ A comprehensive film production platform featuring AI-powered storyboard generat
 ### 1. Clone the repository
 ```bash
 git clone <your-repo-url>
-cd ReactNative
+cd storyboardapp
 ```
 
 ### 2. Backend Setup
@@ -71,11 +72,13 @@ Copy `Backend/.env.example` to `Backend/.env` and configure:
 - `MONGODB_URI` - Your MongoDB connection string
 - `JWT_SECRET` - Secure JWT secret key
 
-**Optional (for full functionality):**
-- `OPENAI_API_KEY` - For AI image generation
+**Optional (for enhanced AI functionality):**
+- `OPENAI_API_KEY` - For premium DALL-E image generation
 - `STABILITY_AI_KEY` - For Stability AI image generation
 - `REPLICATE_API_KEY` - For Replicate AI models
 - `GOOGLE_MAPS_API_KEY` - For location features
+
+**Note**: AI image generation works without API keys using the free Pollinations service
 
 #### Frontend
 The frontend automatically connects to the backend at `http://localhost:5000`
@@ -102,17 +105,20 @@ npm run dev
 
 ## 🔧 API Keys Setup
 
-### OpenAI (for DALL-E)
+### Free AI Generation (Default)
+No setup required - uses Pollinations API for free image generation
+
+### OpenAI DALL-E (Premium)
 1. Go to https://platform.openai.com/
 2. Create an API key
 3. Add to `.env` as `OPENAI_API_KEY`
 
-### Stability AI
+### Stability AI (Premium)
 1. Go to https://platform.stability.ai/
 2. Generate an API key
 3. Add to `.env` as `STABILITY_AI_KEY`
 
-### Replicate
+### Replicate (Premium)
 1. Go to https://replicate.com/
 2. Get your API token
 3. Add to `.env` as `REPLICATE_API_KEY`
@@ -126,7 +132,7 @@ npm run dev
 ## 📁 Project Structure
 
 ```
-ReactNative/
+storyboardapp/
 ├── Backend/                 # Express.js backend
 │   ├── controllers/         # Route controllers
 │   ├── middleware/          # Custom middleware
@@ -160,19 +166,28 @@ ReactNative/
 - `POST /api/storyboard/scenes` - Create new scene
 - `POST /api/storyboard/scenes/:id/panels/:panelId/generate-image` - Generate AI image
 
+
+
+
 ## 🤖 AI Features
 
 The platform supports multiple AI providers for image generation:
 
-1. **OpenAI DALL-E**: High-quality, natural images
-2. **Stability AI**: Artistic and customizable styles
-3. **Replicate**: Advanced AI models including Midjourney-style
+1. **Pollinations (Free)**: Fast, reliable image generation with no API key required
+2. **OpenAI DALL-E**: High-quality, natural images with enhanced prompt understanding
+3. **Stability AI**: Artistic and customizable styles with advanced controls
+4. **Replicate**: Advanced AI models including Midjourney-style generation
 
-AI features include:
-- Automatic prompt enhancement
-- Style presets (realistic sketch, cartoon, dramatic, etc.)
-- Mood controls (neutral, dramatic, bright, dark, vintage)
-- Multiple aspect ratios
+### AI Generation Features:
+- **Automatic Prompt Enhancement**: Context-aware prompt building with scene details
+- **Style Presets**: Realistic sketch, cartoon, detailed realistic, minimalist, dramatic
+- **Mood Controls**: Neutral, dramatic, bright, dark, vintage atmospheres
+- **Shot Type Integration**: Automatically includes camera angles and movements
+- **Real-time Preview**: Generated images display instantly with error handling
+
+- **Multiple Aspect Ratios**: 16:9, 1:1, 9:16 support
+
+
 
 ## 🔒 Security Features
 
@@ -213,9 +228,16 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Verify IP whitelist in MongoDB Atlas
 
 ### AI image generation fails
-- Check API keys are correctly set in `.env`
+- **Free users**: No setup required - Pollinations works without API keys
+- **Premium users**: Check API keys are correctly set in `.env`
 - Verify API key has sufficient credits
 - Check API provider status pages
+
+
+### Generated images not showing
+- Test image URLs directly in browser
+- Ensure backend is running on correct port
+- Check network connectivity to AI services
 
 ### Frontend can't connect to backend
 - Ensure backend is running on port 5000
