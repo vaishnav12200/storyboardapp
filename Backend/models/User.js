@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'director', 'producer', 'admin'],
+    enum: ['user', 'director', 'producer', 'editor', 'admin'],
     default: 'user'
   },
   profileImage: {
@@ -90,17 +90,16 @@ userSchema.virtual('fullName').get(function() {
 });
 
 // Index for better query performance
-userSchema.index({ email: 1 });
+// Email index is handled by unique: true in schema
 userSchema.index({ createdAt: -1 });
 
 // Pre-save middleware to hash password
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function() {
   // Only run this function if password was actually modified
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password')) return;
 
   // Hash the password with cost of 12
   this.password = await bcrypt.hash(this.password, 12);
-  next();
 });
 
 // Instance method to check password

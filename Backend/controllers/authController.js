@@ -3,11 +3,14 @@ const { validationResult } = require('express-validator');
 
 class AuthController {
   // Register new user
-  async register(req, res) {
+  async register(req, res, next) {
     try {
+      console.log('Registration request body:', req.body);
+      
       // Check for validation errors
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('Validation errors:', errors.array());
         return res.status(400).json({
           success: false,
           message: 'Validation failed',
@@ -26,6 +29,7 @@ class AuthController {
 
       res.status(201).json(result);
     } catch (error) {
+      console.error('Registration error:', error);
       res.status(400).json({
         success: false,
         message: error.message
@@ -34,7 +38,7 @@ class AuthController {
   }
 
   // Login user
-  async login(req, res) {
+  async login(req, res, next) {
     try {
       // Check for validation errors
       const errors = validationResult(req);
@@ -67,7 +71,7 @@ class AuthController {
   }
 
   // Logout user
-  async logout(req, res) {
+  async logout(req, res, next) {
     try {
       const token = req.token || req.cookies.token;
       await authService.logout(token);
@@ -88,7 +92,7 @@ class AuthController {
   }
 
   // Get current user profile
-  async getProfile(req, res) {
+  async getProfile(req, res, next) {
     try {
       const result = await authService.getProfile(req.user.userId);
       res.status(200).json(result);
@@ -101,7 +105,7 @@ class AuthController {
   }
 
   // Update user profile
-  async updateProfile(req, res) {
+  async updateProfile(req, res, next) {
     try {
       // Check for validation errors
       const errors = validationResult(req);
@@ -124,7 +128,7 @@ class AuthController {
   }
 
   // Change password
-  async changePassword(req, res) {
+  async changePassword(req, res, next) {
     try {
       // Check for validation errors
       const errors = validationResult(req);
@@ -149,7 +153,7 @@ class AuthController {
   }
 
   // Forgot password
-  async forgotPassword(req, res) {
+  async forgotPassword(req, res, next) {
     try {
       // Check for validation errors
       const errors = validationResult(req);
@@ -174,7 +178,7 @@ class AuthController {
   }
 
   // Reset password
-  async resetPassword(req, res) {
+  async resetPassword(req, res, next) {
     try {
       // Check for validation errors
       const errors = validationResult(req);
@@ -206,7 +210,7 @@ class AuthController {
   }
 
   // Verify email
-  async verifyEmail(req, res) {
+  async verifyEmail(req, res, next) {
     try {
       const { token } = req.params;
       const result = await authService.verifyEmail(token);
@@ -221,7 +225,7 @@ class AuthController {
   }
 
   // Resend verification email
-  async resendVerificationEmail(req, res) {
+  async resendVerificationEmail(req, res, next) {
     try {
       // Check for validation errors
       const errors = validationResult(req);
@@ -246,7 +250,7 @@ class AuthController {
   }
 
   // Refresh token
-  async refreshToken(req, res) {
+  async refreshToken(req, res, next) {
     try {
       const token = req.token || req.cookies.token;
       if (!token) {
@@ -275,7 +279,7 @@ class AuthController {
   }
 
   // Get all users (admin only)
-  async getAllUsers(req, res) {
+  async getAllUsers(req, res, next) {
     try {
       const { page = 1, limit = 10, search = '', role = '' } = req.query;
       const result = await authService.getAllUsers(
@@ -295,7 +299,7 @@ class AuthController {
   }
 
   // Deactivate user account (admin only)
-  async deactivateUser(req, res) {
+  async deactivateUser(req, res, next) {
     try {
       const { userId } = req.params;
       const result = await authService.deactivateAccount(userId);
@@ -310,7 +314,7 @@ class AuthController {
   }
 
   // Reactivate user account (admin only)
-  async reactivateUser(req, res) {
+  async reactivateUser(req, res, next) {
     try {
       const { userId } = req.params;
       const result = await authService.reactivateAccount(userId);
@@ -325,7 +329,7 @@ class AuthController {
   }
 
   // Check authentication status
-  async checkAuth(req, res) {
+  async checkAuth(req, res, next) {
     try {
       if (req.user) {
         const result = await authService.getProfile(req.user.userId);
@@ -350,7 +354,7 @@ class AuthController {
   }
 
   // Delete user account
-  async deleteAccount(req, res) {
+  async deleteAccount(req, res, next) {
     try {
       const { password } = req.body;
       

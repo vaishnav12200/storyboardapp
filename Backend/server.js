@@ -22,24 +22,37 @@ const shotlistRoutes = require('./routes/shotlistRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const exportRoutes = require('./routes/exportRoutes');
 
+
 // Security middleware
 app.use(helmet());
 app.use(compression());
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Rate limiting
+// Rate limiting - more permissive for development
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 1000 // limit each IP to 1000 requests per windowMs
 });
 app.use(limiter);
+
+// Specific auth rate limiting
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50 // 50 auth attempts per 15 minutes
+});
+app.use('/api/auth', authLimiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
 
 // Logging
 if (process.env.NODE_ENV !== 'production') {
@@ -57,6 +70,12 @@ app.get('/health', (req, res) => {
   });
 });
 
+
+
+
+
+
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
@@ -68,8 +87,9 @@ app.use('/api/shotlist', shotlistRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/export', exportRoutes);
 
+
 // 404 handler
-app.use('*', (req, res) => {
+app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route not found'
@@ -88,37 +108,53 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Database connection with retry logic
+// Database connection with fallback to in-memory
 const connectDB = async () => {
   try {
-    console.log('🔍 Environment check:');
-    console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
-    console.log('MONGODB_URI length:', process.env.MONGODB_URI?.length || 0);
-    console.log('NODE_ENV:', process.env.NODE_ENV);
+    console.log('🔍 Connecting to MongoDB...');
     
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI is not defined in environment variables');
+    let mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cinecore';
+    
+    // Try local MongoDB first
+    try {
+      await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 10000,
+      });
+      console.log('✅ Connected to MongoDB');
+      console.log('📱 CineCore API ready!');
+      return;
+    } catch (localError) {
+      console.log('⚠️ Local MongoDB not available, using in-memory database');
+      
+      // Fallback to in-memory MongoDB
+      const { MongoMemoryServer } = require('mongodb-memory-server');
+      const mongod = new MongoMemoryServer();
+      await mongod.start();
+      const uri = mongod.getUri();
+      
+      await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 5000,
+      });
+      
+      console.log('✅ Connected to in-memory MongoDB');
+      console.log('📱 CineCore API ready with temporary database!');
     }
-    
-    await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
-      socketTimeoutMS: 45000,
-    });
-    console.log('✅ Connected to MongoDB Atlas');
-    console.log('📱 CineCore API ready for film production features');
   } catch (err) {
-    console.log('⚠️ MongoDB Atlas connection failed');
-    console.log('Error:', err.message);
-    console.log('📝 Please check:');
-    console.log('  1. Cluster is resumed at https://cloud.mongodb.com/');
-    console.log('  2. Your IP address is whitelisted in Network Access');
-    console.log('  3. Credentials are correct in .env file');
-    console.log('\n🔄 Retrying connection in 10 seconds...');
-    setTimeout(connectDB, 10000); // Retry after 10 seconds
+    console.log('❌ Database connection failed:', err.message);
+    console.log('🔄 Retrying in 5 seconds...');
+    setTimeout(connectDB, 5000);
   }
 };
 
 connectDB();
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down gracefully...');
+  await mongoose.disconnect();
+  process.exit(0);
+});
 
 // Start server
 app.listen(PORT, () => {

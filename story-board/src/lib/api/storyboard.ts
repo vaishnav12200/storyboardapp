@@ -84,14 +84,24 @@ export const storyboardApi = {
   // },
 
   // AI Image generation
-  generateImage: async (imageRequest: GenerateImageRequest): Promise<ApiResponse<{ imageUrl: string }>> => {
+  generateImage: async (imageRequest: GenerateImageRequest): Promise<ApiResponse<{ imageUrl: string; originalImageUrl?: string; generationDetails?: any }>> => {
+    console.log('🎨 Sending AI generation request:', imageRequest);
+    
     const response = await apiClient.post(
       `/storyboard/scenes/${imageRequest.sceneId}/panels/${imageRequest.panelId}/generate-image`,
       {
         prompt: imageRequest.prompt,
-        style: imageRequest.style || 'realistic'
+        provider: imageRequest.provider || 'stability',
+        style: imageRequest.style || 'realistic-sketch',
+        mood: imageRequest.mood || 'neutral',
+        enhancePrompt: imageRequest.enhancePrompt !== false,
+        aspectRatio: imageRequest.aspectRatio || '16:9',
+        shotType: imageRequest.shotType,
+        cameraMovement: imageRequest.cameraMovement
       }
     );
+    
+    console.log('✅ AI generation response:', response.data);
     return response.data;
   },
 

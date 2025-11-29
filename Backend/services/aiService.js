@@ -70,11 +70,55 @@ class AIService {
     };
   }
 
+  // Select best provider based on user type
+  selectBestProvider(user) {
+    if (!user) return 'pollinations';
+    if (user.isPro && this.openaiApiKey) return 'openai';
+    return 'pollinations';
+  }
+  
+  // Generate with free AI services
+  async generateWithPollinations(prompt, options = {}) {
+    const { style = 'realistic-sketch' } = options;
+    
+    // Apply style to prompt (only if not already styled)
+    let styledPrompt = prompt;
+    if (this.stylePresets[style] && !prompt.includes(this.stylePresets[style].prefix)) {
+      styledPrompt = `${this.stylePresets[style].prefix}, ${prompt}, ${this.stylePresets[style].suffix}`;
+    }
+    
+    console.log('🎨 Generating AI image with style:', style);
+    console.log('📝 Styled prompt:', styledPrompt);
+    
+    try {
+      // Use Pollinations AI - reliable free service
+      const cleanPrompt = encodeURIComponent(styledPrompt);
+      const imageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=576&seed=${Math.floor(Math.random() * 1000000)}&model=flux&enhance=false&nologo=true`;
+      
+      console.log('✅ Using Pollinations AI');
+      return { imageUrl };
+      
+    } catch (error) {
+      console.log('⚠️ Pollinations failed, using placeholder');
+      
+      // Generate SVG placeholder only as last resort
+      const svg = `<svg width="1024" height="576" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
+        <text x="50%" y="35%" font-family="Arial" font-size="16" fill="#495057" text-anchor="middle">Style: ${style}</text>
+        <text x="50%" y="50%" font-family="Arial" font-size="18" fill="#495057" text-anchor="middle">${prompt}</text>
+        <text x="50%" y="65%" font-family="Arial" font-size="14" fill="#6c757d" text-anchor="middle">(AI services temporarily unavailable)</text>
+      </svg>`;
+      const placeholderUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+      
+      return { imageUrl: placeholderUrl };
+    }
+  }
+  
   // Main method to generate storyboard image
-  async generateStoryboardImage(prompt, options = {}) {
+  async generateStoryboardImage(prompt, options = {}, user = null) {
     try {
       const {
-        provider = 'stability', // 'openai', 'stability', 'replicate'
+        provider = this.selectBestProvider(user),
         style = 'realistic-sketch',
         shotType = 'medium-shot',
         cameraMovement = 'static',
@@ -92,23 +136,41 @@ class AIService {
         prompt;
 
       console.log(`🎨 Generating storyboard image with ${provider}...`);
-      console.log(`📝 Prompt: ${enhancedPrompt}`);
+      console.log(`📝 Enhanced Prompt: ${enhancedPrompt}`);
+      console.log(`⚙️ Options:`, JSON.stringify(options, null, 2));
 
       let result;
       switch (provider) {
         case 'openai':
-          result = await this.generateWithOpenAI(enhancedPrompt, { aspectRatio });
+          if (!this.openaiApiKey) {
+            result = await this.generateWithPollinations(enhancedPrompt, { aspectRatio, style });
+          } else {
+            result = await this.generateWithOpenAI(enhancedPrompt, { aspectRatio });
+          }
           break;
         case 'stability':
-          result = await this.generateWithStability(enhancedPrompt, { aspectRatio, style });
+          if (!this.stabilityApiKey) {
+            result = await this.generateWithPollinations(enhancedPrompt, { aspectRatio, style });
+          } else {
+            result = await this.generateWithStability(enhancedPrompt, { aspectRatio, style });
+          }
           break;
         case 'replicate':
-          result = await this.generateWithReplicate(enhancedPrompt, { aspectRatio, style });
+          if (!this.replicateApiKey) {
+            result = await this.generateWithPollinations(enhancedPrompt, { aspectRatio, style });
+          } else {
+            result = await this.generateWithReplicate(enhancedPrompt, { aspectRatio, style });
+          }
           break;
+        case 'pollinations':
         default:
-          throw new Error(`Unsupported AI provider: ${provider}`);
+          result = await this.generateWithPollinations(enhancedPrompt, { aspectRatio, style });
+          break;
       }
 
+      console.log('🎉 AI generation completed successfully!');
+      console.log('🖼️ Final image URL:', result.imageUrl);
+      
       return {
         success: true,
         data: {
@@ -118,7 +180,8 @@ class AIService {
           originalPrompt: prompt,
           settings: options,
           generatedAt: new Date(),
-          generationId: uuidv4()
+          generationId: uuidv4(),
+          revisedPrompt: result.revisedPrompt || null
         }
       };
     } catch (error) {
@@ -162,6 +225,7 @@ class AIService {
       });
 
       console.log('✅ OpenAI Response received successfully');
+      console.log('🖼️ Generated image URL:', response.data.data[0].url);
       
       return {
         imageUrl: response.data.data[0].url,
@@ -222,6 +286,8 @@ class AIService {
       // Stability returns base64 image, we need to upload it
       const base64Image = response.data.artifacts[0].base64;
       const imageUrl = await this.uploadBase64Image(base64Image);
+      
+      console.log('🖼️ Uploaded image URL:', imageUrl);
 
       return { imageUrl };
     } catch (error) {
@@ -298,9 +364,9 @@ class AIService {
     }
 
     // Add location context
-    if (location) {
+    if (location && location.name && location.type) {
       enhancedPrompt += `Location: ${location.type} - ${location.name}`;
-      if (timeOfDay) {
+      if (timeOfDay && timeOfDay !== 'undefined') {
         enhancedPrompt += ` during ${timeOfDay}`;
       }
       enhancedPrompt += '. ';
@@ -313,7 +379,9 @@ class AIService {
     }
 
     // Add main prompt
-    enhancedPrompt += basePrompt + '. ';
+    if (basePrompt && basePrompt.trim()) {
+      enhancedPrompt += basePrompt.trim() + '. ';
+    }
 
     // Add mood
     if (mood !== 'neutral') {

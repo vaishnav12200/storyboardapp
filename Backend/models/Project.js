@@ -171,11 +171,10 @@ projectSchema.virtual('budgets', {
 });
 
 // Pre-save middleware to update lastModified
-projectSchema.pre('save', function(next) {
+projectSchema.pre('save', function() {
   if (this.isModified() && !this.isNew) {
     this.lastModified = new Date();
   }
-  next();
 });
 
 // Instance method to check if user has permission
