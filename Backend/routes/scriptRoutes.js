@@ -9,6 +9,7 @@ router.use(protect);
 
 // Project script routes
 router.get('/projects/:projectId', scriptController.getProjectScript);
+router.put('/projects/:projectId', scriptController.updateProjectScript);
 router.get('/projects/:projectId/characters', scriptController.getCharacters);
 
 // Scene script routes

@@ -4,16 +4,23 @@ const User = require('../models/User');
 // Middleware to protect routes
 const protect = async (req, res, next) => {
   try {
+    console.log('🔐 AUTH MIDDLEWARE CALLED');
+    console.log('🌐 URL:', req.method, req.path);
+    console.log('📝 Headers auth:', req.headers.authorization);
+    
     let token;
 
     // Get token from header or cookie
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
+      console.log('🎫 Token found in Authorization header');
     } else if (req.cookies.token) {
       token = req.cookies.token;
+      console.log('🍪 Token found in cookies');
     }
 
     if (!token) {
+      console.log('❌ No token provided');
       return res.status(401).json({
         success: false,
         message: 'Access denied. No token provided.'
@@ -23,18 +30,23 @@ const protect = async (req, res, next) => {
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('✅ Token verified, decoded:', { userId: decoded.userId, iat: decoded.iat });
       
       // Get user from token
       const user = await User.findById(decoded.userId);
       if (!user) {
+        console.log('❌ User not found for token');
         return res.status(401).json({
           success: false,
           message: 'The user belonging to this token no longer exists.'
         });
       }
 
+      console.log('👤 User found:', { id: user._id, email: user.email, isActive: user.isActive });
+
       // Check if user is active
       if (!user.isActive) {
+        console.log('❌ User account deactivated');
         return res.status(401).json({
           success: false,
           message: 'Your account has been deactivated. Please contact support.'

@@ -15,12 +15,16 @@ const upload = storageService.getMulterConfig({
 // All routes require authentication
 router.use(protect);
 
-// Location CRUD routes
-router.post('/projects/:projectId/locations', locationController.createLocation);
-router.get('/projects/:projectId/locations', locationController.getLocations);
+// Location CRUD routes - matching frontend expectations
+router.post('/projects/:projectId', locationController.createLocation);
+router.get('/projects/:projectId', locationController.getLocations);
 router.get('/locations/:locationId', locationController.getLocation);
 router.put('/locations/:locationId', locationController.updateLocation);
 router.delete('/locations/:locationId', locationController.deleteLocation);
+
+// Legacy routes for backward compatibility
+router.post('/projects/:projectId/locations', locationController.createLocation);
+router.get('/projects/:projectId/locations', locationController.getLocations);
 
 // Search and filtering routes
 router.get('/projects/:projectId/locations/search/nearby', locationController.searchNearby);

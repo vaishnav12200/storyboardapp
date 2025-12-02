@@ -2,18 +2,21 @@ export interface Project {
   _id: string;
   title: string;
   description?: string;
-  director: string;
+  type?: string;
+  director?: string;
   producer?: string;
   genre?: string;
-  status: 'development' | 'pre-production' | 'production' | 'post-production' | 'completed';
+  status: 'planning' | 'pre-production' | 'production' | 'post-production' | 'completed' | 'cancelled';
+  priority?: string;
   startDate?: string;
   endDate?: string;
   budget?: {
     total: number;
     currency: string;
   };
-  createdBy: string;
-  collaborators: string[];
+  owner?: any;
+  createdBy?: string;
+  collaborators?: any[];
   createdAt: string;
   updatedAt: string;
 }
@@ -21,7 +24,8 @@ export interface Project {
 export interface CreateProjectData {
   title: string;
   description?: string;
-  director: string;
+  type?: string;
+  director?: string;
   producer?: string;
   genre?: string;
   startDate?: string;
@@ -30,6 +34,6 @@ export interface CreateProjectData {
 }
 
 export interface UpdateProjectData extends Partial<CreateProjectData> {
-  status?: 'development' | 'pre-production' | 'production' | 'post-production' | 'completed';
+  status?: 'planning' | 'pre-production' | 'production' | 'post-production' | 'completed' | 'cancelled';
   collaborators?: string[];
 }

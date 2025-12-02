@@ -1,8 +1,244 @@
 const Scene = require('../models/Scene');
+const Shot = require('../models/Shot');
 const Project = require('../models/Project');
 const { validationResult } = require('express-validator');
 
 class ShotlistController {
+  // Create a new shot
+  async createShot(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
+      const { projectId } = req.params;
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      // Check if user has write permission
+      const hasAccess = project.hasPermission(req.user.userId, 'write');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      const shotData = {
+        ...req.body,
+        project: projectId,
+        createdBy: req.user.userId
+      };
+
+      // Map cameraAngle to angle if provided (frontend uses cameraAngle, backend uses angle)
+      if (shotData.cameraAngle && !shotData.angle) {
+        shotData.angle = shotData.cameraAngle;
+        delete shotData.cameraAngle;
+      }
+
+      // Set shotName to shotNumber if not provided
+      if (!shotData.shotName && shotData.shotNumber) {
+        shotData.shotName = shotData.shotNumber;
+      }
+
+      const shot = new Shot(shotData);
+      await shot.save();
+
+      await shot.populate([
+        { path: 'project', select: 'title' },
+        { path: 'createdBy', select: 'firstName lastName email' },
+        { path: 'scene', select: 'sceneNumber title' }
+      ]);
+
+      res.status(201).json({
+        success: true,
+        message: 'Shot created successfully',
+        data: shot
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // Get all shots for a project
+  async getShots(req, res) {
+    try {
+      const { projectId } = req.params;
+      const { page = 1, limit = 50, status, shotType, sceneId, search } = req.query;
+      const skip = (page - 1) * limit;
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      // Check if user has read permission
+      const hasAccess = project.hasPermission(req.user.userId, 'read');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      const query = { project: projectId };
+      
+      if (status) query.status = status;
+      if (shotType) query.shotType = shotType;
+      if (sceneId) query.scene = sceneId;
+      if (search) {
+        query.$or = [
+          { shotNumber: new RegExp(search, 'i') },
+          { shotName: new RegExp(search, 'i') },
+          { description: new RegExp(search, 'i') }
+        ];
+      }
+
+      const shots = await Shot.find(query)
+        .populate('createdBy', 'firstName lastName email')
+        .populate('scene', 'sceneNumber title')
+        .sort({ shotNumber: 1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      const total = await Shot.countDocuments(query);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          shots,
+          pagination: {
+            current: parseInt(page),
+            pages: Math.ceil(total / limit),
+            total
+          }
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // Update a shot
+  async updateShot(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
+      const { shotId } = req.params;
+
+      const shot = await Shot.findById(shotId).populate('project');
+      if (!shot) {
+        return res.status(404).json({
+          success: false,
+          message: 'Shot not found'
+        });
+      }
+
+      // Check if user has write permission
+      const hasAccess = shot.project.hasPermission(req.user.userId, 'write');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      const updateData = {
+        ...req.body,
+        lastModifiedBy: req.user.userId
+      };
+
+      // Map cameraAngle to angle if provided (frontend uses cameraAngle, backend uses angle)
+      if (updateData.cameraAngle && !updateData.angle) {
+        updateData.angle = updateData.cameraAngle;
+        delete updateData.cameraAngle;
+      }
+
+      Object.assign(shot, updateData);
+      await shot.save();
+
+      await shot.populate([
+        { path: 'createdBy', select: 'firstName lastName email' },
+        { path: 'lastModifiedBy', select: 'firstName lastName email' },
+        { path: 'scene', select: 'sceneNumber title' }
+      ]);
+
+      res.status(200).json({
+        success: true,
+        message: 'Shot updated successfully',
+        data: shot
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // Delete a shot
+  async deleteShot(req, res) {
+    try {
+      const { shotId } = req.params;
+
+      const shot = await Shot.findById(shotId).populate('project');
+      if (!shot) {
+        return res.status(404).json({
+          success: false,
+          message: 'Shot not found'
+        });
+      }
+
+      // Check if user has delete permission
+      const hasAccess = shot.project.hasPermission(req.user.userId, 'delete');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      await Shot.findByIdAndDelete(shotId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Shot deleted successfully'
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
   // Create shotlist from storyboard
   async createShotlist(req, res) {
     try {

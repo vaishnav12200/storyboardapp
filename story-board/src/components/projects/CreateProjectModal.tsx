@@ -43,10 +43,6 @@ const CreateProjectModal = () => {
       newErrors.title = 'Project title is required';
     }
 
-    if (!formData.director.trim()) {
-      newErrors.director = 'Director name is required';
-    }
-
     if (formData.budget && formData.budget < 0) {
       newErrors.budget = 'Budget cannot be negative';
     }
@@ -182,11 +178,10 @@ const CreateProjectModal = () => {
               {/* Director and Producer */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  label="Director *"
+                  label="Director"
                   name="director"
                   value={formData.director}
                   onChange={handleInputChange}
-                  error={errors.director}
                   placeholder="Director name"
                   icon={<User className="w-4 h-4" />}
                 />
@@ -203,24 +198,14 @@ const CreateProjectModal = () => {
 
               {/* Genre and Budget */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Genre
-                  </label>
-                  <motion.select
-                    whileFocus={{ scale: 1.02 }}
-                    transition={{ duration: 0.2 }}
-                    name="genre"
-                    value={formData.genre}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  >
-                    <option value="">Select genre</option>
-                    {genres.map(genre => (
-                      <option key={genre} value={genre.toLowerCase()}>{genre}</option>
-                    ))}
-                  </motion.select>
-                </div>
+                <Input
+                  label="Genre"
+                  name="genre"
+                  value={formData.genre}
+                  onChange={handleInputChange}
+                  placeholder="e.g., Action, Drama, Thriller"
+                  icon={<Film className="w-4 h-4" />}
+                />
 
                 <Input
                   label="Budget"

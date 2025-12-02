@@ -19,7 +19,7 @@ import {
   List
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/lib/store';
-import { fetchProjects } from '@/lib/store/projectsSlice';
+import { fetchProjects, deleteProject } from '@/lib/store/projectsSlice';
 import { openModal, toggleGridView } from '@/lib/store/uiSlice';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -90,6 +90,16 @@ const DashboardPage = () => {
 
   const handleProjectClick = (projectId: string) => {
     router.push(`/projects/${projectId}`);
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await dispatch(deleteProject(projectId)).unwrap();
+      toast.success('Project deleted successfully');
+    } catch (error: any) {
+      toast.error(error || 'Failed to delete project');
+      throw error; // Re-throw to let ProjectCard handle loading state
+    }
   };
 
   if (!isAuthenticated) {
@@ -327,6 +337,7 @@ const DashboardPage = () => {
                     <ProjectCard
                       project={project}
                       onClick={() => handleProjectClick(project._id)}
+                      onDelete={handleDeleteProject}
                       gridView={gridView}
                     />
                   </motion.div>

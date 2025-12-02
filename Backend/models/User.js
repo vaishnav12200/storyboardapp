@@ -74,6 +74,7 @@ const userSchema = new mongoose.Schema({
       push: { type: Boolean, default: true }
     }
   },
+  passwordChangedAt: Date,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
   emailVerificationToken: String,
@@ -100,6 +101,11 @@ userSchema.pre('save', async function() {
 
   // Hash the password with cost of 12
   this.password = await bcrypt.hash(this.password, 12);
+  
+  // Set password changed timestamp (except for new documents)
+  if (!this.isNew) {
+    this.passwordChangedAt = new Date();
+  }
 });
 
 // Instance method to check password

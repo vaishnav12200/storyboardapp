@@ -49,6 +49,9 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { useAppDispatch, useAppSelector } from '@/lib/store';
+import { fetchLocations, createLocation, updateLocation, deleteLocation } from '@/lib/store/locationSlice';
+import type { Location } from '@/lib/store/locationSlice';
 import { toast } from 'react-hot-toast';
 import SatelliteMapView from '@/components/maps/SatelliteMapView';
 
@@ -69,72 +72,7 @@ import SatelliteMapView from '@/components/maps/SatelliteMapView';
 //   }
 // );
 
-interface Location {
-  id: string;
-  name: string;
-  type: 'interior' | 'exterior' | 'studio' | 'public' | 'private' | 'natural';
-  category: 'residential' | 'commercial' | 'industrial' | 'outdoor' | 'institutional' | 'entertainment';
-  address: string;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
-  description: string;
-  images: string[];
-  contact: {
-    name?: string;
-    phone?: string;
-    email?: string;
-    website?: string;
-  };
-  availability: {
-    dates: string[];
-    restrictions?: string;
-    hours?: string;
-  };
-  pricing: {
-    rate: number;
-    unit: 'hour' | 'day' | 'week' | 'flat';
-    deposit?: number;
-    insurance?: number;
-  };
-  features: string[];
-  amenities: string[];
-  equipment: string[];
-  parking: {
-    available: boolean;
-    spaces?: number;
-    cost?: number;
-  };
-  power: {
-    available: boolean;
-    amperage?: number;
-    outlets?: number;
-  };
-  accessibility: {
-    wheelchairAccessible: boolean;
-    loadingDock: boolean;
-    elevator: boolean;
-  };
-  permits: {
-    required: boolean;
-    obtained: boolean;
-    cost?: number;
-    expiryDate?: string;
-  };
-  scenes: string[];
-  shootingDays: string[];
-  status: 'scouting' | 'confirmed' | 'booked' | 'completed' | 'cancelled';
-  rating: number;
-  notes?: string;
-  attachments: Array<{
-    id: string;
-    name: string;
-    type: 'image' | 'document' | 'contract' | 'permit';
-    url: string;
-    uploadedAt: string;
-  }>;
-}
+
 
 const LocationsPage = () => {
   useRequireAuth();
@@ -142,154 +80,365 @@ const LocationsPage = () => {
   const projectId = params.projectId as string;
   const { project, isLoading } = useCurrentProject(projectId);
 
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+  // Redux hooks
+  const dispatch = useAppDispatch();
+  const { locations, isLoading: locationsLoading } = useAppSelector((state) => state.locations);
+
+  // Fetch locations on component mount
+  useEffect(() => {
+    if (projectId) {
+      dispatch(fetchLocations(projectId));
+    }
+  }, [projectId, dispatch]);
+
+  const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'map'>('grid');
   const [showAddLocation, setShowAddLocation] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   // New location form state
   const [newLocation, setNewLocation] = useState({
     name: '',
-    type: 'interior' as Location['type'],
-    category: 'residential' as Location['category'],
+    type: 'indoor' as 'studio' | 'outdoor' | 'indoor' | 'public' | 'private' | 'green-screen' | 'practical',
     address: '',
     description: '',
     contactName: '',
     contactPhone: '',
     contactEmail: '',
     rate: 0,
-    unit: 'day' as 'day' | 'hour' | 'week' | 'flat',
-    status: 'scouting' as Location['status'],
+    status: 'scouting' as 'scouting' | 'approved' | 'booked' | 'confirmed' | 'completed' | 'cancelled' | 'unavailable',
     latitude: '',
     longitude: ''
   });
 
-  const handleLocationSelect = (mapLocation: { id: string; name: string; type: string; category: string; address: string; coordinates?: { lat: number; lng: number }; description: string; status: string; pricing: { rate: number; unit: string } }) => {
+  const handleLocationSelect = (mapLocation: { id: string; name: string; type: string; address: string; coordinates?: { lat: number; lng: number }; description?: string; status: string }) => {
     // Find the full location data from our locations array
-    const fullLocation = locations.find(loc => loc.id === mapLocation.id);
+    const fullLocation = locations.find(loc => loc._id === mapLocation.id);
     if (fullLocation) {
       setSelectedLocation(fullLocation);
     }
   };
 
-  const handleAddLocation = () => {
+  const handleExportLocations = () => {
+    const printWindow = window.open('', '', 'height=800,width=800');
+    if (!printWindow) {
+      toast.error('Failed to open print window. Please allow popups.');
+      return;
+    }
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${project?.title || 'Project'} - Locations</title>
+          <style>
+            @page {
+              margin: 1in;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            h1 {
+              color: #4f46e5;
+              border-bottom: 3px solid #4f46e5;
+              padding-bottom: 10px;
+              margin-bottom: 30px;
+            }
+            h2 {
+              color: #6366f1;
+              margin-top: 30px;
+              margin-bottom: 15px;
+            }
+            .location {
+              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              padding: 20px;
+              margin-bottom: 25px;
+              background: #f9fafb;
+              page-break-inside: avoid;
+            }
+            .location-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: start;
+              margin-bottom: 15px;
+            }
+            .location-title {
+              font-size: 18px;
+              font-weight: bold;
+              color: #1f2937;
+            }
+            .status-badge {
+              padding: 4px 12px;
+              border-radius: 12px;
+              font-size: 12px;
+              font-weight: 600;
+              text-transform: capitalize;
+            }
+            .status-booked, .status-confirmed {
+              background: #d1fae5;
+              color: #065f46;
+            }
+            .status-scouting, .status-approved {
+              background: #dbeafe;
+              color: #1e40af;
+            }
+            .status-completed {
+              background: #e9d5ff;
+              color: #6b21a8;
+            }
+            .status-cancelled {
+              background: #fef3c7;
+              color: #92400e;
+            }
+            .status-unavailable {
+              background: #fee2e2;
+              color: #991b1b;
+            }
+            .location-info {
+              margin-bottom: 10px;
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px;
+            }
+            .info-row {
+              display: flex;
+              align-items: start;
+            }
+            .info-label {
+              font-weight: 600;
+              color: #4b5563;
+              min-width: 100px;
+            }
+            .info-value {
+              color: #1f2937;
+            }
+            .description {
+              margin-top: 10px;
+              padding: 10px;
+              background: white;
+              border-radius: 4px;
+              color: #4b5563;
+            }
+            .stats {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 20px;
+              margin-bottom: 30px;
+              padding: 20px;
+              background: #f3f4f6;
+              border-radius: 8px;
+            }
+            .stat-item {
+              text-align: center;
+            }
+            .stat-value {
+              font-size: 32px;
+              font-weight: bold;
+              color: #4f46e5;
+            }
+            .stat-label {
+              font-size: 12px;
+              color: #6b7280;
+              text-transform: uppercase;
+              margin-top: 5px;
+            }
+            @media print {
+              .location {
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${project?.title || 'Project'} - Location List</h1>
+          
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">${locations.length}</div>
+              <div class="stat-label">Total Locations</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${locations.filter(l => l.status === 'booked').length}</div>
+              <div class="stat-label">Booked</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${locations.filter(l => l.status === 'scouting').length}</div>
+              <div class="stat-label">Scouting</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${locations.filter(l => l.status === 'confirmed').length}</div>
+              <div class="stat-label">Confirmed</div>
+            </div>
+          </div>
+
+          <h2>Locations</h2>
+          ${filteredLocations.map(location => `
+            <div class="location">
+              <div class="location-header">
+                <div class="location-title">${location.name}</div>
+                <span class="status-badge status-${location.status}">${location.status}</span>
+              </div>
+              
+              <div class="location-info">
+                <div class="info-row">
+                  <span class="info-label">Type:</span>
+                  <span class="info-value">${location.type}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Address:</span>
+                  <span class="info-value">${location.address}</span>
+                </div>
+                ${location.cost ? `
+                  <div class="info-row">
+                    <span class="info-label">Daily Rate:</span>
+                    <span class="info-value">$${location.cost.daily} ${location.cost.currency}</span>
+                  </div>
+                ` : ''}
+                ${location.contact?.name ? `
+                  <div class="info-row">
+                    <span class="info-label">Contact:</span>
+                    <span class="info-value">${location.contact.name}</span>
+                  </div>
+                ` : ''}
+                ${location.contact?.phone ? `
+                  <div class="info-row">
+                    <span class="info-label">Phone:</span>
+                    <span class="info-value">${location.contact.phone}</span>
+                  </div>
+                ` : ''}
+                ${location.contact?.email ? `
+                  <div class="info-row">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">${location.contact.email}</span>
+                  </div>
+                ` : ''}
+                ${location.coordinates ? `
+                  <div class="info-row">
+                    <span class="info-label">Coordinates:</span>
+                    <span class="info-value">${location.coordinates.latitude}, ${location.coordinates.longitude}</span>
+                  </div>
+                ` : ''}
+              </div>
+              
+              ${location.description ? `
+                <div class="description">
+                  <strong>Description:</strong><br>
+                  ${location.description}
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
+  const handleAddLocation = async () => {
     if (!newLocation.name.trim() || !newLocation.address.trim()) {
       toast.error('Please fill in location name and address');
       return;
     }
 
-    const location: Location = {
-      id: Date.now().toString(),
+    const locationData = {
       name: newLocation.name.trim(),
       type: newLocation.type,
-      category: newLocation.category,
       address: newLocation.address.trim(),
       coordinates: (newLocation.latitude && newLocation.longitude) ? {
-        lat: parseFloat(newLocation.latitude),
-        lng: parseFloat(newLocation.longitude)
+        latitude: parseFloat(newLocation.latitude),
+        longitude: parseFloat(newLocation.longitude)
       } : undefined,
-      description: newLocation.description.trim(),
-      images: [],
-      contact: {
-        name: newLocation.contactName.trim() || undefined,
+      description: newLocation.description.trim() || undefined,
+      contact: (newLocation.contactName.trim() || newLocation.contactPhone.trim() || newLocation.contactEmail.trim()) ? {
+        name: newLocation.contactName.trim(),
         phone: newLocation.contactPhone.trim() || undefined,
         email: newLocation.contactEmail.trim() || undefined,
-      },
-      availability: {
-        dates: [],
-      },
-      pricing: {
-        rate: newLocation.rate,
-        unit: newLocation.unit,
-      },
-      features: [],
-      amenities: [],
-      equipment: [],
-      parking: { available: false },
-      power: { available: false },
-      accessibility: {
-        wheelchairAccessible: false,
-        loadingDock: false,
-        elevator: false,
-      },
-      permits: { required: false, obtained: false },
-      scenes: [],
-      shootingDays: [],
+      } : undefined,
+      cost: newLocation.rate > 0 ? {
+        daily: newLocation.rate,
+        currency: 'USD'
+      } : undefined,
       status: newLocation.status,
-      rating: 0,
-      attachments: [],
+      notes: newLocation.description.trim() || undefined,
     };
 
-    setLocations([...locations, location]);
-    setShowAddLocation(false);
-    
-    // Reset form
-    setNewLocation({
-      name: '',
-      type: 'interior',
-      category: 'residential',
-      address: '',
-      description: '',
-      contactName: '',
-      contactPhone: '',
-      contactEmail: '',
-      rate: 0,
-      unit: 'day',
-      status: 'scouting',
-      latitude: '',
-      longitude: ''
-    });
+    try {
+      await dispatch(createLocation({ projectId, locationData })).unwrap();
+      setShowAddLocation(false);
+      
+      // Reset form
+      setNewLocation({
+        name: '',
+        type: 'indoor',
+        address: '',
+        description: '',
+        contactName: '',
+        contactPhone: '',
+        contactEmail: '',
+        rate: 0,
+        status: 'scouting',
+        latitude: '',
+        longitude: ''
+      });
 
-    toast.success('Location added successfully!');
+      toast.success('Location added successfully!');
+    } catch (error: any) {
+      toast.error(error || 'Failed to add location');
+    }
   };
 
-  // Initialize locations data
-  useEffect(() => {
-    if (project) {
-      // Start with empty locations - user will add their own
-      const initialLocations: Location[] = [];
-      
-      setLocations(initialLocations);
-    }
-  }, [project]);
+
 
   const getLocationTypeIcon = (type: string) => {
     switch (type) {
-      case 'interior':
+      case 'indoor':
         return <Home className="w-4 h-4" />;
-      case 'exterior':
+      case 'outdoor':
         return <TreePine className="w-4 h-4" />;
       case 'studio':
         return <Camera className="w-4 h-4" />;
       case 'public':
-        return <Users className="w-4 h-4" />;
-      case 'private':
         return <Building className="w-4 h-4" />;
-      case 'natural':
-        return <Mountain className="w-4 h-4" />;
+      case 'private':
+        return <Home className="w-4 h-4" />;
+      case 'green-screen':
+        return <Camera className="w-4 h-4" />;
+      case 'practical':
+        return <MapPin className="w-4 h-4" />;
       default:
         return <MapPin className="w-4 h-4" />;
     }
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'residential':
+  const getCategoryIcon = (type: string) => {
+    switch (type) {
+      case 'indoor':
         return <Home className="w-4 h-4" />;
-      case 'commercial':
-        return <Store className="w-4 h-4" />;
-      case 'industrial':
-        return <Building className="w-4 h-4" />;
       case 'outdoor':
         return <TreePine className="w-4 h-4" />;
-      case 'institutional':
-        return <School className="w-4 h-4" />;
-      case 'entertainment':
-        return <Coffee className="w-4 h-4" />;
+      case 'studio':
+        return <Camera className="w-4 h-4" />;
+      case 'public':
+        return <Building className="w-4 h-4" />;
+      case 'private':
+        return <Home className="w-4 h-4" />;
+      case 'green-screen':
+        return <Camera className="w-4 h-4" />;
+      case 'practical':
+        return <MapPin className="w-4 h-4" />;
       default:
         return <MapPin className="w-4 h-4" />;
     }
@@ -298,14 +447,16 @@ const LocationsPage = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'booked':
-        return 'bg-green-100 text-green-800 border-green-200';
       case 'confirmed':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-green-100 text-green-800 border-green-200';
       case 'scouting':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'approved':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'completed':
         return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'cancelled':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'unavailable':
         return 'bg-red-100 text-red-800 border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -315,28 +466,33 @@ const LocationsPage = () => {
   const filteredLocations = locations.filter(location => {
     const matchesSearch = location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          location.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         location.description.toLowerCase().includes(searchTerm.toLowerCase());
+                         (location.description && location.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesType = typeFilter === 'all' || location.type === typeFilter;
     const matchesStatus = statusFilter === 'all' || location.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || location.category === categoryFilter;
     
-    return matchesSearch && matchesType && matchesStatus && matchesCategory;
+    return matchesSearch && matchesType && matchesStatus;
   });
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        className={`w-4 h-4 ${
-          i < Math.floor(rating) 
-            ? 'text-yellow-400 fill-current' 
-            : i < rating 
-            ? 'text-yellow-400 fill-current opacity-50' 
-            : 'text-gray-300'
-        }`}
-      />
-    ));
-  };
+  // Convert Redux locations to SatelliteMapLocation format
+  const mapLocations = filteredLocations.map(location => ({
+    id: location._id,
+    name: location.name,
+    type: location.type,
+    category: location.type, // Use type as category since we don't have category field
+    address: location.address,
+    coordinates: location.coordinates ? {
+      lat: location.coordinates.latitude,
+      lng: location.coordinates.longitude
+    } : undefined,
+    description: location.description || '',
+    status: location.status,
+    pricing: {
+      rate: location.cost?.daily || 0,
+      unit: 'day'
+    }
+  }));
+
+
 
   if (isLoading) {
     return (
@@ -400,6 +556,7 @@ const LocationsPage = () => {
             <Button
               variant="outline"
               leftIcon={<Download className="w-4 h-4" />}
+              onClick={handleExportLocations}
             >
               Export List
             </Button>
@@ -438,9 +595,9 @@ const LocationsPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-100 text-sm font-medium">Confirmed</p>
+                  <p className="text-blue-100 text-sm font-medium">Scouting</p>
                   <p className="text-2xl font-bold">
-                    {locations.filter(l => l.status === 'confirmed').length}
+                    {locations.filter(l => l.status === 'scouting').length}
                   </p>
                 </div>
                 <Clock className="w-8 h-8 text-white/80" />
@@ -452,9 +609,9 @@ const LocationsPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-yellow-100 text-sm font-medium">Scouting</p>
+                  <p className="text-yellow-100 text-sm font-medium">Confirmed</p>
                   <p className="text-2xl font-bold">
-                    {locations.filter(l => l.status === 'scouting').length}
+                    {locations.filter(l => l.status === 'confirmed').length}
                   </p>
                 </div>
                 <Search className="w-8 h-8 text-white/80" />
@@ -487,10 +644,12 @@ const LocationsPage = () => {
               >
                 <option value="all">All Status</option>
                 <option value="scouting">Scouting</option>
-                <option value="confirmed">Confirmed</option>
+                <option value="approved">Approved</option>
                 <option value="booked">Booked</option>
+                <option value="confirmed">Confirmed</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
+                <option value="unavailable">Unavailable</option>
               </select>
               
               <select
@@ -499,26 +658,14 @@ const LocationsPage = () => {
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="all">All Types</option>
-                <option value="interior">Interior</option>
-                <option value="exterior">Exterior</option>
+                <option value="indoor">Indoor</option>
+                <option value="outdoor">Outdoor</option>
                 <option value="studio">Studio</option>
                 <option value="public">Public</option>
                 <option value="private">Private</option>
-                <option value="natural">Natural</option>
-              </select>
-              
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="all">All Categories</option>
-                <option value="residential">Residential</option>
-                <option value="commercial">Commercial</option>
-                <option value="industrial">Industrial</option>
-                <option value="outdoor">Outdoor</option>
-                <option value="institutional">Institutional</option>
-                <option value="entertainment">Entertainment</option>
+                <option value="green-screen">Green Screen</option>
+                <option value="practical">Practical</option>
+                <option value="virtual">Virtual</option>
               </select>
             </div>
           </CardContent>
@@ -529,7 +676,7 @@ const LocationsPage = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredLocations.map((location) => (
               <motion.div
-                key={location.id}
+                key={location._id}
                 whileHover={{ scale: 1.02 }}
                 className="cursor-pointer"
                 onClick={() => setSelectedLocation(location)}
@@ -537,9 +684,9 @@ const LocationsPage = () => {
                 <Card className="h-full hover:shadow-lg transition-shadow overflow-hidden">
                   {/* Location Image */}
                   <div className="relative h-48 bg-gray-200">
-                    {location.images.length > 0 ? (
+                    {location.images && location.images.length > 0 ? (
                       <img
-                        src={location.images[0]}
+                        src={location.images[0].url}
                         alt={location.name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -548,7 +695,7 @@ const LocationsPage = () => {
                         }}
                       />
                     ) : null}
-                    <div className={`${location.images.length > 0 ? 'hidden' : ''} absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200`}>
+                    <div className={`${location.images && location.images.length > 0 ? 'hidden' : ''} absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200`}>
                       <ImageIcon className="w-12 h-12 text-gray-400" />
                     </div>
                     
@@ -559,7 +706,7 @@ const LocationsPage = () => {
                     </div>
                     
                     <div className="absolute top-3 right-3 flex items-center gap-1">
-                      {renderStars(location.rating)}
+                      <Star className="w-4 h-4 text-gray-300" />
                     </div>
                   </div>
                   
@@ -572,14 +719,11 @@ const LocationsPage = () => {
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           {getLocationTypeIcon(location.type)}
                           <span className="capitalize">{location.type}</span>
-                          <span>•</span>
-                          {getCategoryIcon(location.category)}
-                          <span className="capitalize">{location.category}</span>
                         </div>
                       </div>
                       
                       <p className="text-sm text-gray-600 line-clamp-2">
-                        {location.description}
+                        {location.description || 'No description available'}
                       </p>
                       
                       <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -589,14 +733,10 @@ const LocationsPage = () => {
                       
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="w-4 h-4" />
-                            ${location.pricing.rate}/{location.pricing.unit}
-                          </span>
-                          {location.scenes.length > 0 && (
+                          {location.cost && (
                             <span className="flex items-center gap-1">
-                              <Camera className="w-4 h-4" />
-                              {location.scenes.length} scenes
+                              <DollarSign className="w-4 h-4" />
+                              ${location.cost.daily}/{location.cost.currency}
                             </span>
                           )}
                         </div>
@@ -604,19 +744,14 @@ const LocationsPage = () => {
                       
                       <div className="flex items-center justify-between pt-2 border-t">
                         <div className="flex items-center gap-2">
-                          {location.power.available && (
+                          {location.equipment?.power && (
                             <div className="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
                               <Zap className="w-3 h-3 text-green-600" />
                             </div>
                           )}
-                          {location.parking.available && (
+                          {location.equipment?.parking?.available && (
                             <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
                               <Car className="w-3 h-3 text-blue-600" />
-                            </div>
-                          )}
-                          {location.accessibility.wheelchairAccessible && (
-                            <div className="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
-                              <Users className="w-3 h-3 text-purple-600" />
                             </div>
                           )}
                         </div>
@@ -640,7 +775,7 @@ const LocationsPage = () => {
           <div className="space-y-4">
             {filteredLocations.map((location) => (
               <motion.div
-                key={location.id}
+                key={location._id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               >
@@ -649,9 +784,9 @@ const LocationsPage = () => {
                     <div className="flex items-start gap-6">
                       {/* Location Image */}
                       <div className="w-32 h-24 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
-                        {location.images.length > 0 ? (
+                        {location.images && location.images.length > 0 ? (
                           <img
-                            src={location.images[0]}
+                            src={location.images[0].url}
                             alt={location.name}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -660,7 +795,7 @@ const LocationsPage = () => {
                             }}
                           />
                         ) : null}
-                        <div className={`${location.images.length > 0 ? 'hidden' : ''} w-full h-full flex items-center justify-center`}>
+                        <div className={`${location.images && location.images.length > 0 ? 'hidden' : ''} w-full h-full flex items-center justify-center`}>
                           <ImageIcon className="w-8 h-8 text-gray-400" />
                         </div>
                       </div>
@@ -676,14 +811,6 @@ const LocationsPage = () => {
                               <div className="flex items-center gap-1">
                                 {getLocationTypeIcon(location.type)}
                                 <span className="capitalize">{location.type}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                {getCategoryIcon(location.category)}
-                                <span className="capitalize">{location.category}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                {renderStars(location.rating)}
-                                <span>({location.rating})</span>
                               </div>
                             </div>
                           </div>
@@ -704,7 +831,7 @@ const LocationsPage = () => {
                         </div>
                         
                         <p className="text-gray-600 mb-3 line-clamp-2">
-                          {location.description}
+                          {location.description || 'No description available'}
                         </p>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
@@ -713,19 +840,14 @@ const LocationsPage = () => {
                             <span className="truncate">{location.address}</span>
                           </div>
                           
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <DollarSign className="w-4 h-4" />
-                            <span>${location.pricing.rate}/{location.pricing.unit}</span>
-                          </div>
-                          
-                          {location.scenes.length > 0 && (
+                          {location.cost && (
                             <div className="flex items-center gap-2 text-gray-600">
-                              <Camera className="w-4 h-4" />
-                              <span>{location.scenes.length} scenes assigned</span>
+                              <DollarSign className="w-4 h-4" />
+                              <span>${location.cost.daily}/{location.cost.currency}</span>
                             </div>
                           )}
                           
-                          {location.contact.phone && (
+                          {location.contact?.phone && (
                             <div className="flex items-center gap-2 text-gray-600">
                               <Phone className="w-4 h-4" />
                               <span>{location.contact.phone}</span>
@@ -735,41 +857,19 @@ const LocationsPage = () => {
                         
                         <div className="flex items-center gap-4 mt-3 pt-3 border-t">
                           <div className="flex items-center gap-2">
-                            {location.power.available && (
+                            {location.equipment?.power && (
                               <div className="flex items-center gap-1 text-xs text-green-600">
                                 <Zap className="w-3 h-3" />
-                                <span>Power</span>
+                                <span>Power Available</span>
                               </div>
                             )}
-                            {location.parking.available && (
+                            {location.equipment?.parking?.available && (
                               <div className="flex items-center gap-1 text-xs text-blue-600">
                                 <Car className="w-3 h-3" />
                                 <span>Parking</span>
                               </div>
                             )}
-                            {location.accessibility.wheelchairAccessible && (
-                              <div className="flex items-center gap-1 text-xs text-purple-600">
-                                <Users className="w-3 h-3" />
-                                <span>Accessible</span>
-                              </div>
-                            )}
                           </div>
-                          
-                          {location.permits.required && (
-                            <div className="flex items-center gap-1 text-xs">
-                              {location.permits.obtained ? (
-                                <>
-                                  <CheckCircle className="w-3 h-3 text-green-600" />
-                                  <span className="text-green-600">Permits Obtained</span>
-                                </>
-                              ) : (
-                                <>
-                                  <AlertTriangle className="w-3 h-3 text-yellow-600" />
-                                  <span className="text-yellow-600">Permits Required</span>
-                                </>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -783,8 +883,24 @@ const LocationsPage = () => {
           <Card>
             <CardContent className="p-6">
               <SatelliteMapView
-                locations={filteredLocations}
-                selectedLocation={selectedLocation}
+                locations={mapLocations}
+                selectedLocation={selectedLocation ? {
+                  id: selectedLocation._id,
+                  name: selectedLocation.name,
+                  type: selectedLocation.type,
+                  category: selectedLocation.type,
+                  address: selectedLocation.address,
+                  coordinates: selectedLocation.coordinates ? {
+                    lat: selectedLocation.coordinates.latitude,
+                    lng: selectedLocation.coordinates.longitude
+                  } : undefined,
+                  description: selectedLocation.description || '',
+                  status: selectedLocation.status,
+                  pricing: {
+                    rate: selectedLocation.cost?.daily || 0,
+                    unit: 'day'
+                  }
+                } : null}
                 onLocationSelect={handleLocationSelect}
                 height="700px"
               />
@@ -830,15 +946,13 @@ const LocationsPage = () => {
                     // Reset form on close
                     setNewLocation({
                       name: '',
-                      type: 'interior',
-                      category: 'residential',
+                      type: 'indoor',
                       address: '',
                       description: '',
                       contactName: '',
                       contactPhone: '',
                       contactEmail: '',
                       rate: 0,
-                      unit: 'day',
                       status: 'scouting',
                       latitude: '',
                       longitude: ''
@@ -870,54 +984,37 @@ const LocationsPage = () => {
                     <select
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       value={newLocation.status}
-                      onChange={(e) => setNewLocation({...newLocation, status: e.target.value as Location['status']})}
+                      onChange={(e) => setNewLocation({...newLocation, status: e.target.value as 'scouting' | 'approved' | 'booked' | 'confirmed' | 'completed' | 'cancelled' | 'unavailable'})}
                     >
                       <option value="scouting">Scouting</option>
-                      <option value="confirmed">Confirmed</option>
+                      <option value="approved">Approved</option>
                       <option value="booked">Booked</option>
+                      <option value="confirmed">Confirmed</option>
                       <option value="completed">Completed</option>
                       <option value="cancelled">Cancelled</option>
+                      <option value="unavailable">Unavailable</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Type and Category */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Type
-                    </label>
-                    <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      value={newLocation.type}
-                      onChange={(e) => setNewLocation({...newLocation, type: e.target.value as Location['type']})}
-                    >
-                      <option value="interior">Interior</option>
-                      <option value="exterior">Exterior</option>
-                      <option value="studio">Studio</option>
-                      <option value="public">Public</option>
-                      <option value="private">Private</option>
-                      <option value="natural">Natural</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category
-                    </label>
-                    <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      value={newLocation.category}
-                      onChange={(e) => setNewLocation({...newLocation, category: e.target.value as Location['category']})}
-                    >
-                      <option value="residential">Residential</option>
-                      <option value="commercial">Commercial</option>
-                      <option value="industrial">Industrial</option>
-                      <option value="outdoor">Outdoor</option>
-                      <option value="institutional">Institutional</option>
-                      <option value="entertainment">Entertainment</option>
-                    </select>
-                  </div>
+                {/* Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    value={newLocation.type}
+                    onChange={(e) => setNewLocation({...newLocation, type: e.target.value as 'studio' | 'outdoor' | 'indoor' | 'public' | 'private' | 'green-screen' | 'practical'})}
+                  >
+                    <option value="indoor">Indoor</option>
+                    <option value="outdoor">Outdoor</option>
+                    <option value="studio">Studio</option>
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                    <option value="green-screen">Green Screen</option>
+                    <option value="practical">Practical</option>
+                  </select>
                 </div>
 
                 {/* Address and Coordinates */}
@@ -934,7 +1031,7 @@ const LocationsPage = () => {
                       onChange={(e) => setNewLocation({...newLocation, address: e.target.value})}
                     />
                   </div>
-
+c
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1021,35 +1118,17 @@ const LocationsPage = () => {
                 {/* Pricing */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-md font-medium text-gray-900 mb-3">Pricing</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Rate ($)
-                      </label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        value={newLocation.rate}
-                        onChange={(e) => setNewLocation({...newLocation, rate: Number(e.target.value)})}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Unit
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        value={newLocation.unit}
-                        onChange={(e) => setNewLocation({...newLocation, unit: e.target.value as 'hour' | 'day' | 'week' | 'flat'})}
-                      >
-                        <option value="hour">Per Hour</option>
-                        <option value="day">Per Day</option>
-                        <option value="week">Per Week</option>
-                        <option value="flat">Flat Rate</option>
-                      </select>
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Daily Rate ($)
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      value={newLocation.rate}
+                      onChange={(e) => setNewLocation({...newLocation, rate: Number(e.target.value)})}
+                    />
                   </div>
                 </div>
               </div>
@@ -1061,15 +1140,13 @@ const LocationsPage = () => {
                     setShowAddLocation(false);
                     setNewLocation({
                       name: '',
-                      type: 'interior',
-                      category: 'residential',
+                      type: 'indoor',
                       address: '',
                       description: '',
                       contactName: '',
                       contactPhone: '',
                       contactEmail: '',
                       rate: 0,
-                      unit: 'day',
                       status: 'scouting',
                       latitude: '',
                       longitude: ''

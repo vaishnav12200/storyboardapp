@@ -211,91 +211,11 @@ const ProjectOverviewPage = () => {
           })}
         </div>
 
-        {/* Project Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Project Information */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Film className="w-5 h-5" />
-                  Project Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Director</label>
-                    <p className="text-gray-900 font-medium">{project.director}</p>
-                  </div>
-                  {project.producer && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Producer</label>
-                      <p className="text-gray-900 font-medium">{project.producer}</p>
-                    </div>
-                  )}
-                  {project.startDate && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Start Date</label>
-                      <p className="text-gray-900 font-medium">{formatDate(project.startDate)}</p>
-                    </div>
-                  )}
-                  {project.endDate && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">End Date</label>
-                      <p className="text-gray-900 font-medium">{formatDate(project.endDate)}</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Recent Activity */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Film className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Project created</p>
-                      <p className="text-xs text-gray-600">{formatDate(project.createdAt)}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center py-8 text-gray-500">
-                    <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No recent activity</p>
-                    <p className="text-xs">Start working on your project to see updates here</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
         {/* Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.5 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
         >
           <Card>
             <CardHeader>

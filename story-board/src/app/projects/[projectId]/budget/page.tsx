@@ -8,32 +8,17 @@ import {
   DollarSign,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
   CheckCircle,
-  Clock,
   Download,
-  Upload,
   Edit3,
   Trash2,
-  Filter,
-  Search,
-  FileText,
   Camera,
   Users,
   MapPin,
   Zap,
   Package,
-  Car,
-  Home,
-  Utensils,
-  Shirt,
-  Music,
-  Palette,
-  Calendar,
-  CreditCard,
   PieChart,
   BarChart3,
-  Eye,
 } from 'lucide-react';
 import { useRequireAuth } from '@/hooks/useAuth';
 import { useCurrentProject } from '@/hooks/useProjects';
@@ -41,7 +26,19 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { useAppDispatch, useAppSelector } from '@/lib/store';
+import { fetchBudget, createBudgetItem, updateBudgetItem, deleteBudgetItem } from '@/lib/store/budgetSlice';
 import { toast } from 'react-hot-toast';
+
+interface BudgetItem {
+  id: string;
+  category: string;
+  item: string;
+  estimatedCost: number;
+  actualCost: number;
+  paid: boolean;
+  notes?: string;
+}
 
 interface BudgetCategory {
   id: string;
@@ -51,21 +48,7 @@ interface BudgetCategory {
   allocated: number;
   spent: number;
   remaining: number;
-  expenses: Expense[];
-}
-
-interface Expense {
-  id: string;
-  title: string;
-  description: string;
-  amount: number;
-  date: string;
-  status: 'pending' | 'approved' | 'paid' | 'rejected';
-  category: string;
-  vendor?: string;
-  receiptUrl?: string;
-  approvedBy?: string;
-  paidDate?: string;
+  items: BudgetItem[];
 }
 
 const BudgetPage = () => {
@@ -74,22 +57,29 @@ const BudgetPage = () => {
   const projectId = params.projectId as string;
   const { project, isLoading } = useCurrentProject(projectId);
 
-  const [totalBudget, setTotalBudget] = useState(0);
-  const [categories, setCategories] = useState<BudgetCategory[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [showAddExpense, setShowAddExpense] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
-  const [newExpenseTitle, setNewExpenseTitle] = useState('');
-  const [newExpenseDescription, setNewExpenseDescription] = useState('');
-  const [newExpenseAmount, setNewExpenseAmount] = useState('');
-  const [newExpenseCategory, setNewExpenseCategory] = useState('equipment');
-  const [newExpenseVendor, setNewExpenseVendor] = useState('');
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
+  // Redux hooks
+  const dispatch = useAppDispatch();
+  const { budget, items, isLoading: budgetLoading } = useAppSelector((state) => state.budget);
 
-  // Initialize budget categories
+  // Fetch budget on component mount
+  useEffect(() => {
+    if (projectId) {
+      dispatch(fetchBudget(projectId));
+    }
+  }, [projectId, dispatch]);
+
+  const [categories, setCategories] = useState<BudgetCategory[]>([]);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
+  const [newItem, setNewItem] = useState({
+    category: 'equipment',
+    item: '',
+    estimatedCost: '',
+    actualCost: '',
+    notes: ''
+  });
+
+  // Initialize categories
   useEffect(() => {
     if (project) {
       const initialCategories: BudgetCategory[] = [
@@ -101,7 +91,7 @@ const BudgetPage = () => {
           allocated: 0,
           spent: 0,
           remaining: 0,
-          expenses: [],
+          items: [],
         },
         {
           id: 'crew',
@@ -111,195 +101,408 @@ const BudgetPage = () => {
           allocated: 0,
           spent: 0,
           remaining: 0,
-          expenses: [],
+          items: [],
         },
         {
-          id: 'locations',
+          id: 'location',
           name: 'Locations',
           icon: MapPin,
           color: 'from-purple-500 to-purple-600',
           allocated: 0,
           spent: 0,
           remaining: 0,
-          expenses: [],
+          items: [],
         },
         {
-          id: 'props',
-          name: 'Props & Costumes',
-          icon: Shirt,
+          id: 'cast',
+          name: 'Cast',
+          icon: Users,
           color: 'from-pink-500 to-pink-600',
           allocated: 0,
           spent: 0,
           remaining: 0,
-          expenses: [],
+          items: [],
         },
         {
-          id: 'post',
+          id: 'post-production',
           name: 'Post-Production',
-          icon: Palette,
+          icon: Zap,
           color: 'from-indigo-500 to-indigo-600',
           allocated: 0,
           spent: 0,
           remaining: 0,
-          expenses: [],
+          items: [],
         },
         {
-          id: 'other',
+          id: 'miscellaneous',
           name: 'Other',
           icon: Package,
           color: 'from-gray-500 to-gray-600',
           allocated: 0,
           spent: 0,
           remaining: 0,
-          expenses: [],
-        },
+          items: [],
+        }
       ];
       setCategories(initialCategories);
     }
   }, [project]);
 
-  const totalSpent = categories.reduce((sum, cat) => sum + cat.spent, 0);
-  const totalRemaining = totalBudget - totalSpent;
-  const spentPercentage = (totalSpent / totalBudget) * 100;
-
-  const allExpenses = categories.flatMap(cat => cat.expenses);
-  const filteredExpenses = allExpenses.filter(expense => {
-    const matchesSearch = expense.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expense.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || expense.status === statusFilter;
-    const matchesCategory = !selectedCategory || expense.category === selectedCategory;
-    
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'approved':
-        return <Clock className="w-4 h-4 text-blue-500" />;
-      case 'pending':
-        return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
-      case 'rejected':
-        return <Trash2 className="w-4 h-4 text-red-500" />;
-      default:
-        return null;
+  const handleAddExpense = async () => {
+    if (!newItem.item.trim() || !newItem.estimatedCost) {
+      toast.error('Please enter item name and estimated cost');
+      return;
     }
-  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-green-100 text-green-800';
-      case 'approved':
-        return 'bg-blue-100 text-blue-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'rejected':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+    const estimatedCost = parseFloat(newItem.estimatedCost);
+    const actualCost = parseFloat(newItem.actualCost) || 0;
+
+    if (isNaN(estimatedCost) || estimatedCost <= 0) {
+      toast.error('Please enter a valid estimated cost');
+      return;
     }
-  };
 
-  const handleAddExpense = () => {
-    if (newExpenseTitle.trim() && newExpenseAmount) {
-      const amount = parseFloat(newExpenseAmount);
-      if (isNaN(amount) || amount <= 0) {
-        toast.error('Please enter a valid amount');
-        return;
-      }
+    try {
+      // Map frontend categories to backend enum values
+      const categoryMap: Record<string, string> = {
+        'equipment': 'equipment',
+        'crew': 'crew',
+        'location': 'location',
+        'cast': 'cast',
+        'post-production': 'post-production',
+        'miscellaneous': 'other'
+      };
 
-      if (editingExpense) {
-        // Update existing expense
-        const updatedCategories = categories.map(cat => ({
-          ...cat,
-          expenses: cat.expenses.map(exp =>
-            exp.id === editingExpense.id
-              ? {
-                  ...exp,
-                  title: newExpenseTitle.trim(),
-                  description: newExpenseDescription.trim(),
-                  amount,
-                  category: newExpenseCategory,
-                  vendor: newExpenseVendor.trim() || undefined
-                }
-              : exp
-          ),
-          spent: cat.expenses
-            .map(exp => exp.id === editingExpense.id 
-              ? { ...exp, amount } 
-              : exp
-            )
-            .reduce((sum, exp) => sum + exp.amount, 0)
-        }));
-        
-        setCategories(updatedCategories);
-        setEditingExpense(null);
-        toast.success('Expense updated successfully!');
-      } else {
-        // Add new expense
-        const newExpense: Expense = {
-          id: Date.now().toString(),
-          title: newExpenseTitle.trim(),
-          description: newExpenseDescription.trim(),
-          amount,
-          date: new Date().toISOString().split('T')[0],
-          status: 'pending',
-          category: newExpenseCategory,
-          vendor: newExpenseVendor.trim() || undefined
-        };
+      const itemData = {
+        name: newItem.item.trim(),
+        description: newItem.item.trim(),
+        category: categoryMap[newItem.category] || 'other' as any,
+        unitType: 'flat' as const,
+        quantity: 1,
+        unitCost: estimatedCost,
+        totalCost: estimatedCost,
+        amount: estimatedCost,
+        status: actualCost > 0 ? 'paid' as const : 'planned' as const,
+        notes: newItem.notes.trim() || undefined,
+        date: new Date().toISOString()
+      };
 
-        // Update the category
-        const updatedCategories = categories.map(cat => {
-          if (cat.id === newExpenseCategory) {
-            return {
-              ...cat,
-              expenses: [...cat.expenses, newExpense],
-              spent: cat.spent + amount,
-              remaining: cat.remaining - amount
-            };
-          }
-          return cat;
-        });
+      await dispatch(createBudgetItem({ projectId, itemData })).unwrap();
 
-        setCategories(updatedCategories);
-        toast.success('Expense added successfully!');
-      }
+      // Update local state
+      const expense: BudgetItem = {
+        id: Date.now().toString(),
+        category: newItem.category,
+        item: newItem.item.trim(),
+        estimatedCost,
+        actualCost,
+        paid: actualCost > 0,
+        notes: newItem.notes.trim() || undefined
+      };
+
+      setCategories(categories.map(cat => {
+        if (cat.id === newItem.category) {
+          const newItems = [...cat.items, expense];
+          const allocated = newItems.reduce((sum, item) => sum + item.estimatedCost, 0);
+          const spent = newItems.reduce((sum, item) => sum + item.actualCost, 0);
+          
+          return {
+            ...cat,
+            items: newItems,
+            allocated,
+            spent,
+            remaining: allocated - spent
+          };
+        }
+        return cat;
+      }));
 
       // Reset form
-      setNewExpenseTitle('');
-      setNewExpenseDescription('');
-      setNewExpenseAmount('');
-      setNewExpenseCategory('equipment');
-      setNewExpenseVendor('');
+      setNewItem({
+        category: 'equipment',
+        item: '',
+        estimatedCost: '',
+        actualCost: '',
+        notes: ''
+      });
       setShowAddExpense(false);
+      toast.success('Budget item added successfully!');
+    } catch (error: any) {
+      toast.error(error || 'Failed to add budget item');
     }
   };
 
-  const handleEditExpense = (expense: Expense) => {
-    setEditingExpense(expense);
-    setNewExpenseTitle(expense.title);
-    setNewExpenseDescription(expense.description);
-    setNewExpenseAmount(expense.amount.toString());
-    setNewExpenseCategory(expense.category);
-    setNewExpenseVendor(expense.vendor || '');
-    setShowAddExpense(true);
-  };
-
-  const handleViewExpense = (expense: Expense) => {
-    setViewingExpense(expense);
-  };
-
-  const handleDeleteExpense = (expenseId: string) => {
-    const updatedCategories = categories.map(cat => ({
-      ...cat,
-      expenses: cat.expenses.filter(exp => exp.id !== expenseId),
-      spent: cat.expenses.filter(exp => exp.id !== expenseId).reduce((sum, exp) => sum + exp.amount, 0)
+  const handleDeleteItem = (itemId: string, categoryId: string) => {
+    setCategories(categories.map(cat => {
+      if (cat.id === categoryId) {
+        const newItems = cat.items.filter(item => item.id !== itemId);
+        const allocated = newItems.reduce((sum, item) => sum + item.estimatedCost, 0);
+        const spent = newItems.reduce((sum, item) => sum + item.actualCost, 0);
+        
+        return {
+          ...cat,
+          items: newItems,
+          allocated,
+          spent,
+          remaining: allocated - spent
+        };
+      }
+      return cat;
     }));
-    
-    setCategories(updatedCategories);
-    toast.success('Expense deleted successfully!');
+    toast.success('Budget item deleted successfully!');
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
+  const getTotalSpent = () => {
+    return categories.reduce((sum, cat) => sum + cat.spent, 0);
+  };
+
+  const getTotalAllocated = () => {
+    return categories.reduce((sum, cat) => sum + cat.allocated, 0);
+  };
+
+  const getTotalRemaining = () => {
+    return getTotalAllocated() - getTotalSpent();
+  };
+
+  const handleExportBudget = () => {
+    const printWindow = window.open('', '', 'height=800,width=800');
+    if (!printWindow) {
+      toast.error('Failed to open print window. Please allow popups.');
+      return;
+    }
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${project?.title || 'Project'} - Budget Report</title>
+          <style>
+            @page {
+              margin: 1in;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            h1 {
+              color: #4f46e5;
+              border-bottom: 3px solid #4f46e5;
+              padding-bottom: 10px;
+              margin-bottom: 30px;
+            }
+            h2 {
+              color: #6366f1;
+              margin-top: 30px;
+              margin-bottom: 15px;
+              font-size: 20px;
+            }
+            .summary {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 20px;
+              margin-bottom: 30px;
+              padding: 20px;
+              background: #f3f4f6;
+              border-radius: 8px;
+            }
+            .summary-item {
+              text-align: center;
+            }
+            .summary-value {
+              font-size: 28px;
+              font-weight: bold;
+              color: #4f46e5;
+            }
+            .summary-label {
+              font-size: 12px;
+              color: #6b7280;
+              text-transform: uppercase;
+              margin-top: 5px;
+            }
+            .category {
+              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              padding: 20px;
+              margin-bottom: 25px;
+              background: #f9fafb;
+              page-break-inside: avoid;
+            }
+            .category-header {
+              border-bottom: 2px solid #e5e7eb;
+              padding-bottom: 15px;
+              margin-bottom: 15px;
+            }
+            .category-title {
+              font-size: 20px;
+              font-weight: bold;
+              color: #1f2937;
+              margin-bottom: 8px;
+            }
+            .category-totals {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 10px;
+              font-size: 14px;
+              color: #4b5563;
+            }
+            .category-total-item {
+              display: flex;
+              flex-direction: column;
+            }
+            .total-label {
+              font-size: 12px;
+              color: #6b7280;
+              margin-bottom: 2px;
+            }
+            .total-value {
+              font-weight: 600;
+              color: #1f2937;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 15px;
+            }
+            th {
+              background: #f3f4f6;
+              padding: 10px;
+              text-align: left;
+              font-weight: 600;
+              color: #374151;
+              border-bottom: 2px solid #e5e7eb;
+            }
+            td {
+              padding: 10px;
+              border-bottom: 1px solid #e5e7eb;
+              color: #1f2937;
+            }
+            tr:last-child td {
+              border-bottom: none;
+            }
+            .paid-badge {
+              display: inline-block;
+              padding: 2px 8px;
+              border-radius: 12px;
+              font-size: 11px;
+              font-weight: 600;
+            }
+            .paid-yes {
+              background: #d1fae5;
+              color: #065f46;
+            }
+            .paid-no {
+              background: #fee2e2;
+              color: #991b1b;
+            }
+            .variance-positive {
+              color: #059669;
+            }
+            .variance-negative {
+              color: #dc2626;
+            }
+            @media print {
+              .category {
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${project?.title || 'Project'} - Budget Report</h1>
+          
+          <div class="summary">
+            <div class="summary-item">
+              <div class="summary-value">${formatCurrency(getTotalAllocated())}</div>
+              <div class="summary-label">Total Allocated</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">${formatCurrency(getTotalSpent())}</div>
+              <div class="summary-label">Total Spent</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value ${getTotalRemaining() >= 0 ? 'variance-positive' : 'variance-negative'}">${formatCurrency(getTotalRemaining())}</div>
+              <div class="summary-label">Remaining</div>
+            </div>
+          </div>
+
+          ${categories.map(category => `
+            <div class="category">
+              <div class="category-header">
+                <div class="category-title">${category.name}</div>
+                <div class="category-totals">
+                  <div class="category-total-item">
+                    <span class="total-label">Allocated</span>
+                    <span class="total-value">${formatCurrency(category.allocated)}</span>
+                  </div>
+                  <div class="category-total-item">
+                    <span class="total-label">Spent</span>
+                    <span class="total-value">${formatCurrency(category.spent)}</span>
+                  </div>
+                  <div class="category-total-item">
+                    <span class="total-label">Remaining</span>
+                    <span class="total-value ${category.remaining >= 0 ? 'variance-positive' : 'variance-negative'}">${formatCurrency(category.remaining)}</span>
+                  </div>
+                </div>
+              </div>
+              
+              ${category.items.length > 0 ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Estimated</th>
+                      <th>Actual</th>
+                      <th>Variance</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${category.items.map(item => {
+                      const variance = item.estimatedCost - item.actualCost;
+                      return `
+                        <tr>
+                          <td>
+                            <strong>${item.item}</strong>
+                            ${item.notes ? `<br><small style="color: #6b7280;">${item.notes}</small>` : ''}
+                          </td>
+                          <td>${formatCurrency(item.estimatedCost)}</td>
+                          <td>${formatCurrency(item.actualCost)}</td>
+                          <td class="${variance >= 0 ? 'variance-positive' : 'variance-negative'}">
+                            ${variance >= 0 ? '+' : ''}${formatCurrency(variance)}
+                          </td>
+                          <td>
+                            <span class="paid-badge ${item.paid ? 'paid-yes' : 'paid-no'}">
+                              ${item.paid ? 'Paid' : 'Unpaid'}
+                            </span>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              ` : '<p style="text-align: center; color: #6b7280; padding: 20px;">No items in this category yet.</p>'}
+            </div>
+          `).join('')}
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   if (isLoading) {
@@ -324,6 +527,15 @@ const BudgetPage = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Budget Management</h1>
             <p className="text-gray-600">{project?.title}</p>
+            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-blue-900 mb-2">How Budget Allocation Works:</h3>
+              <div className="text-sm text-blue-800 space-y-1">
+                <p><strong>Allocated (Estimated):</strong> The amount you plan to spend for each item</p>
+                <p><strong>Spent (Actual):</strong> The amount you've actually spent</p>
+                <p><strong>Remaining:</strong> Allocated amount minus spent amount</p>
+                <p><strong>Add Expense:</strong> Use this to add new budget items or record actual spending</p>
+              </div>
+            </div>
           </div>
           
           <div className="flex items-center gap-3">
@@ -356,6 +568,7 @@ const BudgetPage = () => {
             <Button
               variant="outline"
               leftIcon={<Download className="w-4 h-4" />}
+              onClick={handleExportBudget}
             >
               Export Report
             </Button>
@@ -368,12 +581,26 @@ const BudgetPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-indigo-100 text-sm font-medium">Total Budget</p>
-                  <p className="text-2xl font-bold">${totalBudget.toLocaleString()}</p>
+                  <p className="text-indigo-100 text-sm font-medium">Total Allocated</p>
+                  <p className="text-2xl font-bold">{formatCurrency(getTotalAllocated())}</p>
+                  <p className="text-indigo-100 text-xs">Planned budget</p>
                 </div>
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-6 h-6" />
+                <DollarSign className="w-8 h-8 text-white/80" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-r from-red-500 to-orange-500 text-white border-0">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-red-100 text-sm font-medium">Total Spent</p>
+                  <p className="text-2xl font-bold">{formatCurrency(getTotalSpent())}</p>
+                  <p className="text-red-100 text-xs">
+                    {getTotalAllocated() > 0 ? Math.round((getTotalSpent() / getTotalAllocated()) * 100) : 0}% of allocated
+                  </p>
                 </div>
+                <TrendingUp className="w-8 h-8 text-white/80" />
               </div>
             </CardContent>
           </Card>
@@ -382,270 +609,189 @@ const BudgetPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-100 text-sm font-medium">Total Spent</p>
-                  <p className="text-2xl font-bold">${totalSpent.toLocaleString()}</p>
-                  <p className="text-green-100 text-xs">{spentPercentage.toFixed(1)}% of budget</p>
+                  <p className="text-green-100 text-sm font-medium">Remaining</p>
+                  <p className="text-2xl font-bold">{formatCurrency(getTotalRemaining())}</p>
+                  <p className="text-green-100 text-xs">
+                    {getTotalAllocated() > 0 ? Math.round((getTotalRemaining() / getTotalAllocated()) * 100) : 0}% left
+                  </p>
                 </div>
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6" />
-                </div>
+                <TrendingDown className="w-8 h-8 text-white/80" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0">
+          <Card className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-100 text-sm font-medium">Remaining</p>
-                  <p className="text-2xl font-bold">${totalRemaining.toLocaleString()}</p>
-                  <p className="text-blue-100 text-xs">{(100 - spentPercentage).toFixed(1)}% left</p>
+                  <p className="text-purple-100 text-sm font-medium">Total Items</p>
+                  <p className="text-2xl font-bold">{categories.reduce((sum, cat) => sum + cat.items.length, 0)}</p>
+                  <p className="text-purple-100 text-xs">Budget items</p>
                 </div>
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <TrendingDown className="w-6 h-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white border-0">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-yellow-100 text-sm font-medium">Pending Approval</p>
-                  <p className="text-2xl font-bold">
-                    ${allExpenses
-                      .filter(e => e.status === 'pending')
-                      .reduce((sum, e) => sum + e.amount, 0)
-                      .toLocaleString()}
-                  </p>
-                  <p className="text-yellow-100 text-xs">
-                    {allExpenses.filter(e => e.status === 'pending').length} expenses
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <Clock className="w-6 h-6" />
-                </div>
+                <CheckCircle className="w-8 h-8 text-white/80" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {viewMode === 'overview' ? (
-          /* Category Overview */
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {categories.map((category) => {
-              const Icon = category.icon;
-              const spentPercentage = (category.spent / category.allocated) * 100;
-              
-              return (
-                <motion.div
-                  key={category.id}
-                  whileHover={{ scale: 1.02 }}
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSelectedCategory(category.id);
-                    setViewMode('detailed');
-                  }}
-                >
-                  <Card className="h-full hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-3">
-                          <div className={`w-10 h-10 bg-gradient-to-r ${category.color} rounded-lg flex items-center justify-center`}>
-                            <Icon className="w-5 h-5 text-white" />
-                          </div>
-                          {category.name}
-                        </CardTitle>
-                        <span className="text-sm text-gray-500">
-                          {category.expenses.length} expenses
-                        </span>
+        {/* Budget Categories */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {categories.map((category) => {
+            const Icon = category.icon;
+            const progress = category.allocated > 0 ? (category.spent / category.allocated) * 100 : 0;
+            
+            return (
+              <Card key={category.id} className="overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 bg-gradient-to-r ${category.color} rounded-lg flex items-center justify-center`}>
+                        <Icon className="w-6 h-6 text-white" />
                       </div>
-                    </CardHeader>
-                    
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Allocated</span>
-                          <span className="font-semibold">${category.allocated.toLocaleString()}</span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Spent</span>
-                          <span className="font-semibold text-red-600">${category.spent.toLocaleString()}</span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Remaining</span>
-                          <span className="font-semibold text-green-600">${category.remaining.toLocaleString()}</span>
-                        </div>
-                        
-                        {/* Progress Bar */}
-                        <div className="pt-2">
-                          <div className="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Progress</span>
-                            <span>{spentPercentage.toFixed(1)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`bg-gradient-to-r ${category.color} h-2 rounded-full transition-all duration-300`}
-                              style={{ width: `${Math.min(spentPercentage, 100)}%` }}
-                            />
-                          </div>
-                        </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{category.name}</h3>
+                        <p className="text-sm text-gray-500">{category.items.length} items</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        ) : (
-          /* Detailed Expense View */
-          <div className="space-y-6">
-            {/* Filters */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Expense Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      placeholder="Search expenses..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Allocated</span>
+                      <span className="font-medium">{formatCurrency(category.allocated)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Spent</span>
+                      <span className="font-medium text-red-600">{formatCurrency(category.spent)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Remaining</span>
+                      <span className="font-medium text-green-600">{formatCurrency(category.remaining)}</span>
+                    </div>
                   </div>
                   
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="paid">Paid</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                  
-                  <select
-                    value={selectedCategory || 'all'}
-                    onChange={(e) => setSelectedCategory(e.target.value === 'all' ? null : e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="all">All Categories</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </CardContent>
-            </Card>
+                  <div>
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Progress</span>
+                      <span>{Math.round(progress)}%</span>
+                    </div>
+                    <div className={`w-full bg-gray-200 rounded-full h-2`}>
+                      <div 
+                        className={`bg-gradient-to-r ${category.color} h-2 rounded-full transition-all duration-300`}
+                        style={{ width: `${Math.min(progress, 100)}%` }}
+                      />
+                    </div>
+                  </div>
 
-            {/* Expense List */}
-            <div className="space-y-4">
-              {filteredExpenses.map((expense) => {
-                const category = categories.find(cat => cat.id === expense.category);
-                const Icon = category?.icon || Package;
-                
-                return (
-                  <motion.div
-                    key={expense.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    <Card className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-4 flex-1">
-                            <div className={`w-12 h-12 bg-gradient-to-r ${category?.color || 'from-gray-500 to-gray-600'} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                              <Icon className="w-6 h-6 text-white" />
-                            </div>
-                            
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="text-lg font-semibold text-gray-900 truncate">
-                                  {expense.title}
-                                </h3>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
-                                  {expense.status}
-                                </span>
-                              </div>
-                              
-                              <p className="text-gray-600 mb-2">{expense.description}</p>
-                              
-                              <div className="flex items-center gap-4 text-sm text-gray-500">
-                                <span>📅 {new Date(expense.date).toLocaleDateString()}</span>
-                                {expense.vendor && <span>🏢 {expense.vendor}</span>}
-                                <span>📁 {category?.name}</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <p className="text-2xl font-bold text-gray-900">
-                                ${expense.amount.toLocaleString()}
-                              </p>
-                              {expense.status === 'paid' && expense.paidDate && (
-                                <p className="text-xs text-green-600">
-                                  Paid {new Date(expense.paidDate).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-                            
-                            <div className="flex items-center gap-1">
-                              {getStatusIcon(expense.status)}
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                onClick={() => handleViewExpense(expense)}
-                                title="View details"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                onClick={() => handleEditExpense(expense)}
-                                title="Edit expense"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteExpense(expense.id)}
-                                title="Delete expense"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
+                  {/* Show recent items */}
+                  {category.items.length > 0 && (
+                    <div className="space-y-2">
+                      {category.items.slice(0, 3).map((item) => (
+                        <div key={item.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                          <span className="text-sm text-gray-700 truncate flex-1">{item.item}</span>
+                          <div className="flex items-center gap-2 ml-2">
+                            <span className="text-xs text-gray-500">{formatCurrency(item.estimatedCost)}</span>
+                            {item.paid && <CheckCircle className="w-4 h-4 text-green-500" />}
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-              
-              {filteredExpenses.length === 0 && (
-                <Card>
-                  <CardContent className="p-12 text-center">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <FileText className="w-8 h-8 text-gray-400" />
+                      ))}
+                      {category.items.length > 3 && (
+                        <p className="text-xs text-gray-500 text-center">
+                          +{category.items.length - 3} more items
+                        </p>
+                      )}
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No expenses found</h3>
-                    <p className="text-gray-600">Try adjusting your search or filter criteria</p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Detailed View */}
+        {viewMode === 'detailed' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Budget Items Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Item
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Allocated
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Spent
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {categories.flatMap(cat => 
+                      cat.items.map(item => ({ ...item, categoryName: cat.name, categoryId: cat.id }))
+                    ).map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{item.item}</div>
+                            {item.notes && (
+                              <div className="text-sm text-gray-500">{item.notes}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-900">
+                            {item.categoryName}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(item.estimatedCost)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(item.actualCost || 0)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {item.paid ? (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                              Paid
+                            </span>
+                          ) : (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                              Pending
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteItem(item.id, item.categoryId)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
 
@@ -656,193 +802,113 @@ const BudgetPage = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowAddExpense(false)}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-lg shadow-xl max-w-md w-full"
+              className="bg-white rounded-xl shadow-xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {editingExpense ? 'Edit Budget Expense' : 'Add Budget Expense'}
+                  Add New Budget Item
                 </h3>
+                <p className="text-sm text-gray-600 mt-2">
+                  Track your production expenses and allocate budget properly
+                </p>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <select
+                    value={newItem.category}
+                    onChange={(e) => setNewItem({...newItem, category: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="equipment">Equipment</option>
+                    <option value="crew">Crew</option>
+                    <option value="location">Location</option>
+                    <option value="cast">Cast</option>
+                    <option value="post-production">Post-Production</option>
+                    <option value="miscellaneous">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Item Name *
+                  </label>
+                  <Input
+                    value={newItem.item}
+                    onChange={(e) => setNewItem({...newItem, item: e.target.value})}
+                    placeholder="e.g., Camera rental, Actor fees"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estimated Cost (Allocated) *
+                  </label>
+                  <Input
+                    type="number"
+                    value={newItem.estimatedCost}
+                    onChange={(e) => setNewItem({...newItem, estimatedCost: e.target.value})}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This is the amount you plan to spend (allocated budget)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Actual Cost (Spent)
+                  </label>
+                  <Input
+                    type="number"
+                    value={newItem.actualCost}
+                    onChange={(e) => setNewItem({...newItem, actualCost: e.target.value})}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This is the actual amount spent (leave 0 if not spent yet)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes
+                  </label>
+                  <textarea
+                    value={newItem.notes}
+                    onChange={(e) => setNewItem({...newItem, notes: e.target.value})}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    placeholder="Additional notes or details"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
                 <Button
-                  variant="ghost"
-                  size="icon"
+                  variant="outline"
                   onClick={() => setShowAddExpense(false)}
                 >
-                  ×
+                  Cancel
                 </Button>
-              </div>
-              
-              <div className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Expense Title
-                    </label>
-                    <Input
-                      value={newExpenseTitle}
-                      onChange={(e) => setNewExpenseTitle(e.target.value)}
-                      placeholder="Enter expense title"
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category
-                    </label>
-                    <select
-                      value={newExpenseCategory}
-                      onChange={(e) => setNewExpenseCategory(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Amount ($)
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={newExpenseAmount}
-                      onChange={(e) => setNewExpenseAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      value={newExpenseDescription}
-                      onChange={(e) => setNewExpenseDescription(e.target.value)}
-                      placeholder="Enter description (optional)"
-                      rows={3}
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary resize-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Vendor (Optional)
-                    </label>
-                    <Input
-                      value={newExpenseVendor}
-                      onChange={(e) => setNewExpenseVendor(e.target.value)}
-                      placeholder="Enter vendor name"
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowAddExpense(false)}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleAddExpense}
-                      className="flex-1 bg-primary"
-                    >
-                      {editingExpense ? 'Update Expense' : 'Add Expense'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* View Expense Modal */}
-      <AnimatePresence>
-        {viewingExpense && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-lg shadow-xl max-w-md w-full"
-            >
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Expense Details</h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setViewingExpense(null)}
-                >
-                  ×
+                <Button onClick={handleAddExpense}>
+                  Add Item
                 </Button>
-              </div>
-              
-              <div className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                    <p className="text-gray-900">{viewingExpense.title}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <p className="text-gray-900 capitalize">{viewingExpense.category}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                    <p className="text-gray-900 text-2xl font-bold">${viewingExpense.amount.toLocaleString()}</p>
-                  </div>
-                  {viewingExpense.description && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                      <p className="text-gray-900">{viewingExpense.description}</p>
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                    <p className="text-gray-900">{new Date(viewingExpense.date).toLocaleDateString()}</p>
-                  </div>
-                  {viewingExpense.vendor && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
-                      <p className="text-gray-900">{viewingExpense.vendor}</p>
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full capitalize ${getStatusColor(viewingExpense.status)}`}>
-                      {viewingExpense.status}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-3 pt-6">
-                  <Button
-                    onClick={() => {
-                      setViewingExpense(null);
-                      handleEditExpense(viewingExpense);
-                    }}
-                    className="flex-1"
-                  >
-                    Edit Expense
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setViewingExpense(null)}
-                    className="flex-1"
-                  >
-                    Close
-                  </Button>
-                </div>
               </div>
             </motion.div>
           </motion.div>

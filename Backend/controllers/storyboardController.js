@@ -646,17 +646,54 @@ class StoryboardController {
         });
       }
 
+      console.log('📝 Creating project with data:', {
+        director: req.body.director,
+        producer: req.body.producer,
+        genre: req.body.genre,
+        title: req.body.title
+      });
+
+      // Prepare project data with proper structure
       const projectData = {
-        ...req.body,
+        title: req.body.title,
+        description: req.body.description,
+        type: req.body.type || 'short-film',
+        genre: req.body.genre,
+        director: req.body.director,
+        producer: req.body.producer,
+        status: req.body.status || 'planning',
         owner: req.user.userId,
         createdBy: req.user.userId,
         lastModifiedBy: req.user.userId
       };
 
+      // Handle budget conversion (frontend sends number, backend expects object)
+      if (req.body.budget !== undefined && req.body.budget !== null) {
+        projectData.budget = {
+          total: Number(req.body.budget),
+          currency: 'USD'
+        };
+      }
+
+      // Handle timeline dates
+      if (req.body.startDate || req.body.endDate) {
+        projectData.timeline = {
+          startDate: req.body.startDate,
+          endDate: req.body.endDate
+        };
+      }
+
       const project = new Project(projectData);
       await project.save();
 
       await project.populate('owner', 'firstName lastName email profileImage');
+
+      console.log('✅ Project created:', {
+        id: project._id,
+        director: project.director,
+        producer: project.producer,
+        genre: project.genre
+      });
 
       res.status(201).json({
         success: true,
@@ -664,6 +701,7 @@ class StoryboardController {
         data: project
       });
     } catch (error) {
+      console.error('❌ Error creating project:', error);
       res.status(500).json({
         success: false,
         message: error.message
@@ -994,8 +1032,14 @@ class StoryboardController {
   // Create scene in project
   async createScene(req, res) {
     try {
+      console.log('🎬 CREATE SCENE API CALLED');
+      console.log('📂 Project ID:', req.params.projectId);
+      console.log('👤 User ID:', req.user?.userId);
+      console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+      
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('❌ Validation errors:', errors.array());
         return res.status(400).json({
           success: false,
           message: 'Validation failed',
@@ -1058,6 +1102,11 @@ class StoryboardController {
   // Get all scenes for a project
   async getScenes(req, res) {
     try {
+      console.log('🎬 GET SCENES API CALLED');
+      console.log('📂 Project ID:', req.params.projectId);
+      console.log('👤 User ID:', req.user?.userId);
+      console.log('🔍 Query params:', req.query);
+      
       const { projectId } = req.params;
       const { page = 1, limit = 10, status } = req.query;
       const skip = (page - 1) * limit;
@@ -1342,6 +1391,11 @@ class StoryboardController {
   // Add storyboard panel to scene
   async addStoryboardPanel(req, res) {
     try {
+      console.log('🎨 ADD STORYBOARD PANEL API CALLED');
+      console.log('🎬 Scene ID:', req.params.sceneId);
+      console.log('👤 User ID:', req.user?.userId);
+      console.log('📝 Panel data:', JSON.stringify(req.body, null, 2));
+      
       const { sceneId } = req.params;
       const panelData = req.body;
 

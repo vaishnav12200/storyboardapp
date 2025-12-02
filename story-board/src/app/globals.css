@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide Next.js development indicators */
+#__next-build-watcher,
+nextjs-portal,
+[data-nextjs-dialog-overlay],
+[data-nextjs-scroll-lock],
+.__next-dev-overlay-container {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* CSS Variables for theming */
 @layer base {
   :root {
@@ -74,11 +86,12 @@
 /* Base styles */
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
@@ -88,35 +101,37 @@
 
   /* Dark mode styles */
   .dark body {
-    @apply bg-gray-900 text-gray-100;
+    background-color: rgb(17 24 39);
+    color: rgb(243 244 246);
   }
 
   .dark header {
-    @apply bg-gray-800 border-gray-700;
+    background-color: rgb(31 41 55);
+    border-color: rgb(55 65 81);
   }
 
   .dark .bg-white {
-    @apply bg-gray-800;
+    background-color: rgb(31 41 55);
   }
 
   .dark .bg-gray-50 {
-    @apply bg-gray-900;
+    background-color: rgb(17 24 39);
   }
 
   .dark .text-gray-900 {
-    @apply text-gray-100;
+    color: rgb(243 244 246);
   }
 
   .dark .text-gray-600 {
-    @apply text-gray-300;
+    color: rgb(209 213 219);
   }
 
   .dark .border-gray-200 {
-    @apply border-gray-700;
+    border-color: rgb(55 65 81);
   }
 
   .dark .hover\:bg-gray-100:hover {
-    @apply bg-gray-700;
+    background-color: rgb(55 65 81);
   }
 
   .dark .bg-gradient-to-r {
@@ -260,56 +275,60 @@
 /* Loading spinner */
 @layer components {
   .spinner {
-    @apply inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 9999px;
+    animation: spin 1s linear infinite;
   }
 
   .spinner-lg {
-    @apply w-8 h-8 border-4;
+    width: 2rem;
+    height: 2rem;
+    border-width: 4px;
   }
 }
 
 /* Custom focus styles */
 @layer utilities {
-  .focus-ring {
-    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+  .focus-ring:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px white, 0 0 0 4px #6366f1;
   }
 
-  .focus-ring-inset {
-    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset;
+  .focus-ring-inset:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 2px #6366f1;
   }
 }
 
 /* Typography improvements */
 @layer base {
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold text-gray-900;
+    font-weight: 600;
+    color: rgb(17 24 39);
   }
 
-  h1 {
-    @apply text-4xl md:text-5xl leading-tight;
-  }
-
-  h2 {
-    @apply text-3xl md:text-4xl leading-tight;
-  }
-
-  h3 {
-    @apply text-2xl md:text-3xl leading-snug;
-  }
-
-  h4 {
-    @apply text-xl md:text-2xl leading-snug;
-  }
-
-  h5 {
-    @apply text-lg md:text-xl leading-normal;
-  }
-
-  h6 {
-    @apply text-base md:text-lg leading-normal;
-  }
-
+  h1 { font-size: 2.25rem; line-height: 1.25; }
+  h2 { font-size: 1.875rem; line-height: 1.25; }
+  h3 { font-size: 1.5rem; line-height: 1.375; }
+  h4 { font-size: 1.25rem; line-height: 1.375; }
+  h5 { font-size: 1.125rem; line-height: 1.5; }
+  h6 { font-size: 1rem; line-height: 1.5; }
+  
   p {
-    @apply text-gray-600 leading-relaxed;
+    color: rgb(75 85 99);
+    line-height: 1.625;
+  }
+  
+  @media (min-width: 768px) {
+    h1 { font-size: 3rem; }
+    h2 { font-size: 2.25rem; }
+    h3 { font-size: 1.875rem; }
+    h4 { font-size: 1.5rem; }
+    h5 { font-size: 1.25rem; }
+    h6 { font-size: 1.125rem; }
   }
 }

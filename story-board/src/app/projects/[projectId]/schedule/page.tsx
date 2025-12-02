@@ -40,6 +40,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { toast } from 'react-hot-toast';
+import { useAppDispatch, useAppSelector } from '@/lib/store';
+import { fetchSchedule, createScheduleItem, updateScheduleItem, deleteScheduleItem } from '@/lib/store/scheduleSlice';
 
 interface ScheduleEvent {
   id: string;
@@ -77,11 +79,14 @@ const SchedulePage = () => {
   const params = useParams();
   const projectId = params.projectId as string;
   const { project, isLoading } = useCurrentProject(projectId);
+  
+  // Redux hooks
+  const dispatch = useAppDispatch();
+  const { items: scheduleItems, isLoading: loading } = useAppSelector((state) => state.schedule);
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'calendar' | 'timeline' | 'list'>('calendar');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [shootingDays, setShootingDays] = useState<ShootingDay[]>([]);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -95,99 +100,67 @@ const SchedulePage = () => {
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
   const [viewingEvent, setViewingEvent] = useState<ScheduleEvent | null>(null);
 
-  // Initialize schedule data
+  // Initialize schedule data from Redux
   useEffect(() => {
-    if (project) {
-      const initialSchedule: ShootingDay[] = [];
-      
-      setShootingDays(initialSchedule);
+    if (projectId) {
+      dispatch(fetchSchedule(projectId));
     }
-  }, [project]);
+  }, [projectId, dispatch]);
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (newEventTitle.trim() && newEventDate && newEventStartTime && newEventEndTime) {
       const startDateTime = new Date(`${newEventDate} ${newEventStartTime}`);
       const endDateTime = new Date(`${newEventDate} ${newEventEndTime}`);
       const duration = Math.round((endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60)); // duration in minutes
 
-      if (editingEvent) {
-        // Update existing event
-        const updatedDays = shootingDays.map(day => ({
-          ...day,
-          events: day.events.map(event =>
-            event.id === editingEvent.id
-              ? {
-                  ...event,
-                  title: newEventTitle.trim(),
-                  type: newEventType,
-                  startTime: newEventStartTime,
-                  endTime: newEventEndTime,
-                  duration,
-                  location: newEventLocation.trim() || 'TBD'
-                }
-              : event
-          )
-        }));
-        setShootingDays(updatedDays);
-        setEditingEvent(null);
-        toast.success('Event updated successfully!');
-      } else {
-        // Add new event
-        const newEvent: ScheduleEvent = {
-          id: Date.now().toString(),
-          title: newEventTitle.trim(),
-          type: newEventType,
-          startTime: newEventStartTime,
-          endTime: newEventEndTime,
-          duration,
-          location: newEventLocation.trim() || 'TBD',
-          crew: [],
-          equipment: [],
-          status: 'scheduled',
-          priority: 'medium'
-        };
+      const eventData = {
+        title: newEventTitle.trim(),
+        type: newEventType,
+        date: newEventDate,
+        startTime: newEventStartTime,
+        endTime: newEventEndTime,
+        duration,
+        location: newEventLocation.trim() || 'TBD',
+      };
 
-        // Find or create shooting day
-        const existingDayIndex = shootingDays.findIndex(day => day.date === newEventDate);
-        
-        if (existingDayIndex >= 0) {
-          const updatedDays = [...shootingDays];
-          updatedDays[existingDayIndex].events.push(newEvent);
-          updatedDays[existingDayIndex].totalDuration += duration;
-          setShootingDays(updatedDays);
+      try {
+        if (editingEvent) {
+          // Update existing event
+          await dispatch(updateScheduleItem({
+            id: editingEvent.id,
+            itemData: eventData
+          })).unwrap();
+          setEditingEvent(null);
+          toast.success('Event updated successfully!');
         } else {
-          const newDay: ShootingDay = {
-            date: newEventDate,
-            events: [newEvent],
-            totalDuration: duration,
-            location: newEventLocation.trim() || 'TBD',
-            callTime: newEventStartTime,
-            wrapTime: newEventEndTime,
-            crewCount: 0,
-            status: 'upcoming'
-          };
-          setShootingDays([...shootingDays, newDay]);
+          // Add new event
+          await dispatch(createScheduleItem({
+            projectId,
+            itemData: eventData
+          })).unwrap();
+          toast.success('Event added successfully!');
         }
 
-        toast.success('Event added successfully!');
+        // Reset form
+        setNewEventTitle('');
+        setNewEventType('scene');
+        setNewEventDate('');
+        setNewEventStartTime('');
+        setNewEventEndTime('');
+        setNewEventLocation('');
+        setShowAddEvent(false);
+      } catch (error) {
+        toast.error(editingEvent ? 'Failed to update event' : 'Failed to add event');
+        console.error('Schedule operation error:', error);
       }
-
-      // Reset form
-      setNewEventTitle('');
-      setNewEventType('scene');
-      setNewEventDate('');
-      setNewEventStartTime('');
-      setNewEventEndTime('');
-      setNewEventLocation('');
-      setShowAddEvent(false);
     }
   };
 
-  const handleEditEvent = (event: ScheduleEvent) => {
+  const handleEditEvent = (event: ScheduleEvent & { date?: string }) => {
     setEditingEvent(event);
     setNewEventTitle(event.title);
     setNewEventType(event.type);
-    setNewEventDate(''); // Would need to derive from shooting day
+    setNewEventDate(event.date || ''); // Use date from the extended event
     setNewEventStartTime(event.startTime);
     setNewEventEndTime(event.endTime);
     setNewEventLocation(event.location);
@@ -198,14 +171,14 @@ const SchedulePage = () => {
     setViewingEvent(event);
   };
 
-  const handleDeleteEvent = (eventId: string) => {
-    const updatedDays = shootingDays.map(day => ({
-      ...day,
-      events: day.events.filter(event => event.id !== eventId)
-    })).filter(day => day.events.length > 0);
-    
-    setShootingDays(updatedDays);
-    toast.success('Event deleted successfully!');
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      await dispatch(deleteScheduleItem(eventId)).unwrap();
+      toast.success('Event deleted successfully!');
+    } catch (error) {
+      toast.error('Failed to delete event');
+      console.error('Delete event error:', error);
+    }
   };
 
   const getEventTypeIcon = (type: string) => {
@@ -299,6 +272,314 @@ const SchedulePage = () => {
     return `${hours}h ${mins}m`;
   };
 
+  const handleExportSchedule = () => {
+    const printWindow = window.open('', '', 'height=800,width=800');
+    if (!printWindow) {
+      toast.error('Failed to open print window. Please allow popups.');
+      return;
+    }
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${project?.title || 'Project'} - Production Schedule</title>
+          <style>
+            @page {
+              margin: 1in;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            h1 {
+              color: #4f46e5;
+              border-bottom: 3px solid #4f46e5;
+              padding-bottom: 10px;
+              margin-bottom: 30px;
+            }
+            h2 {
+              color: #6366f1;
+              margin-top: 30px;
+              margin-bottom: 15px;
+              font-size: 20px;
+            }
+            .stats {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 20px;
+              margin-bottom: 30px;
+              padding: 20px;
+              background: #f3f4f6;
+              border-radius: 8px;
+            }
+            .stat-item {
+              text-align: center;
+            }
+            .stat-value {
+              font-size: 32px;
+              font-weight: bold;
+              color: #4f46e5;
+            }
+            .stat-label {
+              font-size: 12px;
+              color: #6b7280;
+              text-transform: uppercase;
+              margin-top: 5px;
+            }
+            .day {
+              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              padding: 20px;
+              margin-bottom: 25px;
+              background: #f9fafb;
+              page-break-inside: avoid;
+            }
+            .day-header {
+              border-bottom: 2px solid #e5e7eb;
+              padding-bottom: 15px;
+              margin-bottom: 20px;
+            }
+            .day-title {
+              font-size: 20px;
+              font-weight: bold;
+              color: #1f2937;
+              margin-bottom: 8px;
+            }
+            .day-meta {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 15px;
+              font-size: 14px;
+              color: #6b7280;
+            }
+            .event {
+              border-left: 4px solid #4f46e5;
+              padding: 15px;
+              margin-bottom: 15px;
+              background: white;
+              border-radius: 4px;
+            }
+            .event-scene {
+              border-left-color: #3b82f6;
+            }
+            .event-setup {
+              border-left-color: #10b981;
+            }
+            .event-break {
+              border-left-color: #6b7280;
+            }
+            .event-meeting {
+              border-left-color: #8b5cf6;
+            }
+            .event-travel {
+              border-left-color: #eab308;
+            }
+            .event-wrap {
+              border-left-color: #ef4444;
+            }
+            .event-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: start;
+              margin-bottom: 10px;
+            }
+            .event-title {
+              font-size: 16px;
+              font-weight: 600;
+              color: #1f2937;
+            }
+            .event-time {
+              font-size: 14px;
+              color: #4b5563;
+              font-weight: 500;
+            }
+            .status-badge {
+              padding: 4px 12px;
+              border-radius: 12px;
+              font-size: 12px;
+              font-weight: 600;
+              text-transform: capitalize;
+            }
+            .status-completed {
+              background: #d1fae5;
+              color: #065f46;
+            }
+            .status-in-progress {
+              background: #dbeafe;
+              color: #1e40af;
+            }
+            .status-scheduled {
+              background: #f3f4f6;
+              color: #374151;
+            }
+            .status-delayed {
+              background: #fef3c7;
+              color: #92400e;
+            }
+            .status-cancelled {
+              background: #fee2e2;
+              color: #991b1b;
+            }
+            .event-details {
+              font-size: 14px;
+              color: #4b5563;
+              margin-top: 8px;
+            }
+            .event-detail-row {
+              margin-bottom: 5px;
+            }
+            .label {
+              font-weight: 600;
+              color: #374151;
+            }
+            @media print {
+              .day {
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${project?.title || 'Project'} - Production Schedule</h1>
+          
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">${shootingDays.length}</div>
+              <div class="stat-label">Shooting Days</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${allEvents.length}</div>
+              <div class="stat-label">Total Events</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${allEvents.filter(e => e.status === 'completed').length}</div>
+              <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${allEvents.filter(e => e.status === 'scheduled').length}</div>
+              <div class="stat-label">Scheduled</div>
+            </div>
+          </div>
+
+          ${shootingDays.map(day => `
+            <div class="day">
+              <div class="day-header">
+                <div class="day-title">${new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div class="day-meta">
+                  <div><span class="label">Call Time:</span> ${day.callTime}</div>
+                  <div><span class="label">Wrap Time:</span> ${day.wrapTime}</div>
+                  <div><span class="label">Location:</span> ${day.location}</div>
+                </div>
+              </div>
+              
+              ${day.events.map(event => `
+                <div class="event event-${event.type}">
+                  <div class="event-header">
+                    <div>
+                      <div class="event-title">${event.title}</div>
+                      <div class="event-time">${event.startTime} - ${event.endTime} (${formatDuration(event.duration)})</div>
+                    </div>
+                    <span class="status-badge status-${event.status}">${event.status}</span>
+                  </div>
+                  
+                  <div class="event-details">
+                    <div class="event-detail-row">
+                      <span class="label">Type:</span> ${event.type}
+                    </div>
+                    <div class="event-detail-row">
+                      <span class="label">Location:</span> ${event.location}
+                    </div>
+                    ${event.sceneNumbers && event.sceneNumbers.length > 0 ? `
+                      <div class="event-detail-row">
+                        <span class="label">Scenes:</span> ${event.sceneNumbers.join(', ')}
+                      </div>
+                    ` : ''}
+                    ${event.crew && event.crew.length > 0 ? `
+                      <div class="event-detail-row">
+                        <span class="label">Crew:</span> ${event.crew.slice(0, 3).join(', ')}${event.crew.length > 3 ? ` (+${event.crew.length - 3} more)` : ''}
+                      </div>
+                    ` : ''}
+                    ${event.notes ? `
+                      <div class="event-detail-row">
+                        <span class="label">Notes:</span> ${event.notes}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+          
+          ${shootingDays.length === 0 ? '<p style="text-align: center; color: #6b7280; padding: 40px;">No scheduled events yet.</p>' : ''}
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
+  // Transform Redux schedule items into shooting days format
+  const shootingDays = React.useMemo(() => {
+    const dayMap = new Map<string, ShootingDay>();
+    
+    scheduleItems.forEach(item => {
+      const date = new Date(item.date).toISOString().split('T')[0];
+      if (!dayMap.has(date)) {
+        dayMap.set(date, {
+          date,
+          events: [],
+          totalDuration: 0,
+          location: item.location?.name || 'TBD',
+          callTime: item.timeSlot?.startTime || '08:00',
+          wrapTime: item.timeSlot?.endTime || '18:00',
+          crewCount: item.crew?.length || 0,
+          status: 'upcoming' as const
+        });
+      }
+      
+      const day = dayMap.get(date)!;
+      day.events.push({
+        id: item._id || '',
+        title: item.title,
+        type: item.type === 'shooting' ? 'scene' : 
+              item.type === 'meeting' ? 'meeting' : 'other' as 'scene' | 'setup' | 'break' | 'meeting' | 'travel' | 'wrap',
+        startTime: item.timeSlot?.startTime || '08:00',
+        endTime: item.timeSlot?.endTime || '18:00',
+        duration: item.timeSlot?.duration || 0,
+        location: item.location?.name || 'TBD',
+        crew: item.crew?.map(c => c.member) || [],
+        equipment: item.equipment?.map(e => e.name) || [],
+        status: item.status === 'draft' ? 'scheduled' : 
+                item.status === 'postponed' ? 'delayed' :
+                item.status === 'confirmed' ? 'scheduled' :
+                item.status as 'scheduled' | 'in-progress' | 'completed' | 'cancelled' | 'delayed',
+        priority: item.priority || 'medium',
+        notes: item.notes,
+        sceneNumbers: item.scenes?.map(s => s.scene) || []
+      });
+      day.totalDuration += item.timeSlot?.duration || 0;
+      
+      // Update call and wrap times to be earliest and latest
+      if (item.timeSlot?.startTime && item.timeSlot.startTime < day.callTime) {
+        day.callTime = item.timeSlot.startTime;
+      }
+      if (item.timeSlot?.endTime && item.timeSlot.endTime > day.wrapTime) {
+        day.wrapTime = item.timeSlot.endTime;
+      }
+    });
+    
+    return Array.from(dayMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [scheduleItems]);
+
   const allEvents = shootingDays.flatMap(day => 
     day.events.map(event => ({ ...event, date: day.date }))
   );
@@ -312,7 +593,7 @@ const SchedulePage = () => {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  if (isLoading) {
+  if (isLoading || loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -374,6 +655,7 @@ const SchedulePage = () => {
             <Button
               variant="outline"
               leftIcon={<Download className="w-4 h-4" />}
+              onClick={handleExportSchedule}
             >
               Export Schedule
             </Button>

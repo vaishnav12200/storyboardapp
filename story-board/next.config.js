@@ -2,9 +2,14 @@ const path = require('path')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: {
+    appIsrStatus: false,
+    buildActivity: false,
+    buildActivityPosition: 'bottom-right',
+  },
+  reactStrictMode: false,
   images: {
     unoptimized: true,
-    domains: ['localhost', 'your-backend-domain.com', 'cloudinary.com', 's3.amazonaws.com', 'image.pollinations.ai'],
     remotePatterns: [
       {
         protocol: 'https',
@@ -19,6 +24,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
+  turbopack: {},
   webpack: (config) => {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src')
     return config

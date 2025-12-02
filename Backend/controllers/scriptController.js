@@ -32,20 +32,152 @@ class ScriptController {
         .populate('lastModifiedBy', 'firstName lastName');
 
       const script = this.formatScript(scenes, format, project);
+      
+      console.log('Fetching script for project:', projectId);
+      console.log('Project has versions:', project.scriptVersions?.length || 0);
 
       res.status(200).json({
         success: true,
         data: {
-          project: {
-            id: project._id,
-            title: project.title,
-            type: project.type,
-            genre: project.genre
-          },
+          _id: project._id,
+          projectId: project._id,
+          title: project.title,
+          content: project.scriptContent || '',
+          scenes: scenes.map(scene => ({
+            number: scene.sceneNumber.toString(),
+            title: scene.title,
+            location: scene.location.name,
+            timeOfDay: scene.location.timeOfDay,
+            pageCount: 1,
+            elements: []
+          })),
+          characters: project.characters || [],
+          versions: project.scriptVersions || [],
           script,
           format,
           totalScenes: scenes.length,
           generatedAt: new Date()
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // Update project script
+  async updateProjectScript(req, res) {
+    try {
+      const { projectId } = req.params;
+      const { content, scenes, characters } = req.body;
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      // Check if user has write permission
+      const hasAccess = project.hasPermission(req.user.userId, 'write');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      // Update script content
+      if (content !== undefined) {
+        project.scriptContent = content;
+      }
+
+      // Update characters
+      if (characters) {
+        project.characters = characters;
+      }
+
+      // Create new version when saving
+      if (content !== undefined || scenes || characters) {
+        // Initialize scriptVersions array if it doesn't exist
+        if (!project.scriptVersions || !Array.isArray(project.scriptVersions)) {
+          project.scriptVersions = [];
+        }
+
+        // Mark all previous versions as not current
+        project.scriptVersions.forEach(v => {
+          v.isCurrent = false;
+        });
+
+        // Create new version
+        const newVersionNumber = project.scriptVersions.length + 1;
+        const newVersion = {
+          id: Date.now().toString(),
+          version: `${newVersionNumber}.0`,
+          content: content || project.scriptContent || '',
+          scenes: scenes || [],
+          characters: characters || project.characters || [],
+          timestamp: new Date(),
+          isCurrent: true
+        };
+
+        project.scriptVersions.push(newVersion);
+        
+        console.log('Created new version:', newVersion.version);
+        console.log('Total versions:', project.scriptVersions.length);
+      }
+
+      await project.save();
+      
+      console.log('Project saved with versions:', project.scriptVersions?.length || 0);
+
+      // Update or create scenes if provided
+      if (scenes && Array.isArray(scenes)) {
+        for (const sceneData of scenes) {
+          const existingScene = await Scene.findOne({ 
+            project: projectId, 
+            sceneNumber: parseInt(sceneData.number) 
+          });
+
+          if (existingScene) {
+            existingScene.title = sceneData.title;
+            existingScene.location = {
+              type: sceneData.location.includes('INT') ? 'interior' : 'exterior',
+              name: sceneData.location,
+              timeOfDay: sceneData.timeOfDay
+            };
+            existingScene.lastModifiedBy = req.user.userId;
+            await existingScene.save();
+          } else {
+            await Scene.create({
+              project: projectId,
+              sceneNumber: parseInt(sceneData.number),
+              title: sceneData.title,
+              location: {
+                type: sceneData.location.includes('INT') ? 'interior' : 'exterior',
+                name: sceneData.location,
+                timeOfDay: sceneData.timeOfDay
+              },
+              createdBy: req.user.userId,
+              lastModifiedBy: req.user.userId
+            });
+          }
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Script updated successfully',
+        data: {
+          _id: project._id,
+          projectId: project._id,
+          content: project.scriptContent,
+          scenes,
+          characters: project.characters,
+          versions: project.scriptVersions
         }
       });
     } catch (error) {

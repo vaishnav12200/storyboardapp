@@ -7,6 +7,13 @@ const router = express.Router();
 // All routes require authentication
 router.use(protect);
 
+// Frontend-compatible routes for budget items/expenses
+router.post('/projects/:projectId/items', budgetController.addExpenseToProject);
+router.put('/projects/:projectId/items/:itemId', budgetController.updateExpenseInProject);
+router.delete('/projects/:projectId/items/:itemId', budgetController.deleteExpenseFromProject);
+router.get('/projects/:projectId', budgetController.getProjectBudget);
+router.put('/projects/:projectId', budgetController.updateProjectBudget);
+
 // Budget CRUD routes
 router.post('/projects/:projectId/budgets', budgetController.createBudget);
 router.get('/projects/:projectId/budget', budgetController.getProjectBudget);

@@ -213,14 +213,6 @@ const Sidebar = () => {
 
         {/* Action Buttons */}
         <div className="space-y-2">
-          <Link
-            href="/settings"
-            className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            Settings
-          </Link>
-          
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"

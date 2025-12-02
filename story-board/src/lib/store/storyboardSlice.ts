@@ -26,10 +26,17 @@ export const fetchScenes = createAsyncThunk(
   'storyboard/fetchScenes',
   async (projectId: string, { rejectWithValue }) => {
     try {
+      console.log('Fetching storyboard scenes for project:', projectId);
       const response = await apiClient.get(`/storyboard/projects/${projectId}/scenes`);
+      console.log('Storyboard scenes fetch response:', response.data);
       return response.data as ApiResponse<Scene[]>;
     } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to fetch scenes');
+      console.error('Storyboard scenes fetch error:', {
+        error: error.response?.data || error.message,
+        status: error.response?.status,
+        projectId
+      });
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch scenes');
     }
   }
 );
@@ -102,7 +109,7 @@ export const createPanel = createAsyncThunk(
     panelData: CreatePanelData 
   }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/storyboard/projects/${projectId}/scenes/${sceneId}/panels`, panelData);
+      const response = await apiClient.post(`/storyboard/scenes/${sceneId}/panels`, panelData);
       return { sceneId, panel: response.data.data as StoryboardPanel };
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to create panel');
@@ -125,7 +132,7 @@ export const updatePanel = createAsyncThunk(
   }, { rejectWithValue }) => {
     try {
       const response = await apiClient.put(
-        `/storyboard/projects/${projectId}/scenes/${sceneId}/panels/${panelId}`, 
+        `/storyboard/scenes/${sceneId}/panels/${panelId}`, 
         panelData
       );
       return { sceneId, panel: response.data.data as StoryboardPanel };
@@ -148,7 +155,7 @@ export const deletePanel = createAsyncThunk(
   }, { rejectWithValue }) => {
     try {
       const response = await apiClient.delete(
-        `/storyboard/projects/${projectId}/scenes/${sceneId}/panels/${panelId}`
+        `/storyboard/scenes/${sceneId}/panels/${panelId}`
       );
       return { sceneId, panelId, response: response.data as ApiResponse };
     } catch (error: any) {
@@ -208,7 +215,20 @@ const storyboardSlice = createSlice({
       })
       .addCase(fetchScenes.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.scenes = action.payload.data;
+        // Backend returns { data: { scenes: [], pagination: {} } }
+        // Extract the scenes array from the nested structure
+        const data = action.payload.data;
+        if (data && typeof data === 'object' && 'scenes' in data) {
+          // Data has { scenes: [], pagination: {} } structure
+          state.scenes = Array.isArray((data as any).scenes) ? (data as any).scenes : [];
+        } else if (Array.isArray(data)) {
+          // Data is already an array
+          state.scenes = data;
+        } else {
+          // Fallback to empty array
+          state.scenes = [];
+        }
+        console.log('Scenes loaded into state:', state.scenes.length, 'scenes');
       })
       .addCase(fetchScenes.rejected, (state, action) => {
         state.isLoading = false;
@@ -245,25 +265,39 @@ const storyboardSlice = createSlice({
       // Create panel
       .addCase(createPanel.fulfilled, (state, action) => {
         const { sceneId, panel } = action.payload;
+        // Ensure scenes is an array
+        if (!Array.isArray(state.scenes)) {
+          state.scenes = [];
+        }
         const scene = state.scenes.find(s => s._id === sceneId);
         if (scene) {
+          if (!scene.panels) {
+            scene.panels = [];
+          }
           scene.panels.push(panel);
         }
         if (state.currentScene && state.currentScene._id === sceneId) {
+          if (!state.currentScene.panels) {
+            state.currentScene.panels = [];
+          }
           state.currentScene.panels.push(panel);
         }
       })
       // Update panel
       .addCase(updatePanel.fulfilled, (state, action) => {
         const { sceneId, panel } = action.payload;
+        // Ensure scenes is an array
+        if (!Array.isArray(state.scenes)) {
+          state.scenes = [];
+        }
         const scene = state.scenes.find(s => s._id === sceneId);
-        if (scene) {
+        if (scene && scene.panels) {
           const panelIndex = scene.panels.findIndex(p => p._id === panel._id);
           if (panelIndex !== -1) {
             scene.panels[panelIndex] = panel;
           }
         }
-        if (state.currentScene && state.currentScene._id === sceneId) {
+        if (state.currentScene && state.currentScene._id === sceneId && state.currentScene.panels) {
           const panelIndex = state.currentScene.panels.findIndex(p => p._id === panel._id);
           if (panelIndex !== -1) {
             state.currentScene.panels[panelIndex] = panel;
@@ -276,11 +310,15 @@ const storyboardSlice = createSlice({
       // Delete panel
       .addCase(deletePanel.fulfilled, (state, action) => {
         const { sceneId, panelId } = action.payload;
+        // Ensure scenes is an array
+        if (!Array.isArray(state.scenes)) {
+          state.scenes = [];
+        }
         const scene = state.scenes.find(s => s._id === sceneId);
-        if (scene) {
+        if (scene && scene.panels) {
           scene.panels = scene.panels.filter(p => p._id !== panelId);
         }
-        if (state.currentScene && state.currentScene._id === sceneId) {
+        if (state.currentScene && state.currentScene._id === sceneId && state.currentScene.panels) {
           state.currentScene.panels = state.currentScene.panels.filter(p => p._id !== panelId);
         }
         if (state.currentPanel && state.currentPanel._id === panelId) {

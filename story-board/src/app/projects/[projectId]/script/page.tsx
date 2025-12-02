@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 interface Character {
   id: string;
@@ -48,6 +49,8 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { useAppDispatch, useAppSelector } from '@/lib/store';
+import { fetchScript, updateScript } from '@/lib/store/scriptSlice';
 
 interface ScriptElement {
   id: string;
@@ -89,14 +92,27 @@ interface Scene {
   elements: string[]; // IDs of script elements
 }
 
+interface ScriptVersion {
+  id: string;
+  version: string;
+  content: string;
+  scenes: Scene[];
+  characters: Character[];
+  timestamp: string;
+  isCurrent: boolean;
+}
+
 const ScriptBreakdownPage = () => {
   useRequireAuth();
   const params = useParams();
   const projectId = params.projectId as string;
   const { project, isLoading } = useCurrentProject(projectId);
 
+  // Redux hooks
+  const dispatch = useAppDispatch();
+  const { script, elements, isLoading: scriptLoading } = useAppSelector((state) => state.script);
+
   const [scenes, setScenes] = useState<Scene[]>([]);
-  const [scriptElements, setScriptElements] = useState<ScriptElement[]>([]);
   const [selectedScene, setSelectedScene] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'breakdown' | 'elements' | 'scenes'>('breakdown');
   const [showAddElement, setShowAddElement] = useState(false);
@@ -117,6 +133,178 @@ const ScriptBreakdownPage = () => {
   const [viewingCharacter, setViewingCharacter] = useState<Character | null>(null);
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
   const [viewingScene, setViewingScene] = useState<Scene | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [versions, setVersions] = useState<ScriptVersion[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<string>('1.0');
+
+  // Fetch script data on component mount
+  useEffect(() => {
+    if (projectId) {
+      dispatch(fetchScript(projectId)).then((result: any) => {
+        if (result.payload?.data) {
+          const data = result.payload.data;
+          
+          // Load versions from backend
+          if (data.versions && Array.isArray(data.versions) && data.versions.length > 0) {
+            console.log('Loading versions from backend:', data.versions);
+            setVersions(data.versions);
+            
+            // Find current version
+            const current = data.versions.find((v: ScriptVersion) => v.isCurrent);
+            if (current) {
+              setCurrentVersion(current.version);
+              setScriptContent(current.content);
+              setScenes(current.scenes);
+              setCharacters(current.characters);
+            } else {
+              // Load latest version
+              const latest = data.versions[data.versions.length - 1];
+              setScriptContent(latest.content);
+              setScenes(latest.scenes);
+              setCharacters(latest.characters);
+              setCurrentVersion(latest.version);
+            }
+          } else {
+            // Fallback to old data structure
+            if (data.content) {
+              setScriptContent(data.content);
+            }
+            if (data.scenes && Array.isArray(data.scenes)) {
+              setScenes(data.scenes);
+            }
+            if (data.characters && Array.isArray(data.characters)) {
+              setCharacters(data.characters);
+            }
+          }
+        }
+      });
+    }
+  }, [projectId, dispatch]);
+
+  const handleSaveScript = async () => {
+    if (!projectId) return;
+
+    try {
+      const result = await dispatch(updateScript({
+        projectId,
+        scriptData: {
+          content: scriptContent,
+          scenes,
+          characters
+        }
+      })).unwrap();
+      
+      console.log('Save result:', result);
+      
+      // Update versions from backend response
+      if (result.data?.versions && result.data.versions.length > 0) {
+        console.log('Versions from backend:', result.data.versions);
+        setVersions(result.data.versions);
+        
+        // Find the current version
+        const current = result.data.versions.find((v: ScriptVersion) => v.isCurrent);
+        if (current) {
+          setCurrentVersion(current.version);
+        }
+      }
+      
+      toast.success('Script saved successfully!');
+    } catch (error: any) {
+      console.error('Save error:', error);
+      toast.error(error || 'Failed to save script');
+    }
+  };
+
+  const handleLoadVersion = async (version: ScriptVersion) => {
+    setScriptContent(version.content);
+    setScenes(version.scenes);
+    setCharacters(version.characters);
+    setCurrentVersion(version.version);
+    
+    toast.success(`Loaded version ${version.version}`);
+  };
+
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '', 'height=800,width=800');
+    if (!printWindow) {
+      toast.error('Please allow popups to export PDF');
+      return;
+    }
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${project?.title || 'Script'}</title>
+        <style>
+          @page { margin: 1in; }
+          body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 12pt;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+          }
+          h1 { 
+            text-align: center; 
+            font-size: 18pt;
+            margin-bottom: 30px;
+          }
+          .content {
+            white-space: pre-wrap;
+          }
+          .page-break { page-break-after: always; }
+          .summary {
+            margin-top: 40px;
+            page-break-before: always;
+          }
+          .summary h2 {
+            font-size: 14pt;
+            margin-bottom: 15px;
+          }
+          .summary-item {
+            margin: 8px 0;
+            font-size: 10pt;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${project?.title || 'UNTITLED SCRIPT'}</h1>
+        <div class="content">${scriptContent || 'No content'}</div>
+        
+        ${scenes.length > 0 ? `
+        <div class="summary">
+          <h2>SCENE BREAKDOWN</h2>
+          ${scenes.map(scene => `
+            <div class="summary-item">
+              <strong>Scene ${scene.number}:</strong> ${scene.title}<br/>
+              <span style="margin-left: 20px;">Location: ${scene.location} - ${scene.timeOfDay.toUpperCase()}</span>
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+        
+        ${characters.length > 0 ? `
+        <div class="summary">
+          <h2>CHARACTER LIST</h2>
+          ${characters.map((char, idx) => `
+            <div class="summary-item">
+              ${idx + 1}. <strong>${char.name}</strong> - ${char.role}
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
 
   const formatText = (type: 'bold' | 'italic' | 'underline') => {
     // Text formatting logic would go here
@@ -229,6 +417,114 @@ const ScriptBreakdownPage = () => {
     setScenes(scenes.filter(scene => scene.number !== sceneNumber));
   };
 
+  const handleAIBreakdown = async () => {
+    if (!scriptContent.trim()) {
+      toast.error('Please paste your screenplay first!');
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    try {
+      // Parse script content for scenes
+      const lines = scriptContent.split('\n');
+      const extractedScenes: Scene[] = [];
+      const extractedCharacters: Character[] = [];
+      const characterMap = new Map();
+      
+      let currentScene: Partial<Scene> | null = null;
+      let sceneCounter = 1;
+      
+      lines.forEach((line, index) => {
+        const trimmed = line.trim();
+        
+        // Detect scene headings (INT./EXT.)
+        const sceneMatch = trimmed.match(/^(INT|EXT)[\.\s]+(.+?)\s*[-—]\s*(DAY|NIGHT|DAWN|DUSK)/i);
+        if (sceneMatch) {
+          // Save previous scene if exists
+          if (currentScene?.title && currentScene?.location && currentScene?.timeOfDay) {
+            extractedScenes.push({
+              number: (currentScene as any).number || sceneCounter.toString(),
+              title: currentScene.title,
+              location: currentScene.location,
+              timeOfDay: currentScene.timeOfDay,
+              pageCount: 1,
+              elements: []
+            });
+            sceneCounter++;
+          }
+          
+          // Start new scene
+          const locationType = sceneMatch[1].toUpperCase();
+          const location = sceneMatch[2].trim();
+          const timeOfDay = sceneMatch[3].toLowerCase() as 'day' | 'night' | 'dawn' | 'dusk';
+          
+          currentScene = {
+            number: sceneCounter.toString(),
+            title: `${locationType} ${location}`,
+            location: `${locationType} ${location}`,
+            timeOfDay,
+            pageCount: 1,
+            elements: []
+          };
+        }
+        
+        // Detect character names (ALL CAPS line)
+        if (trimmed.length > 0 && trimmed === trimmed.toUpperCase() && trimmed.length < 40 && trimmed.length > 2) {
+          const nextLine = lines[index + 1]?.trim();
+          // Check if next line is dialogue (not scene heading, not all caps)
+          if (nextLine && nextLine !== nextLine.toUpperCase() && !nextLine.match(/^(INT|EXT)[\.\s]/)) {
+            const characterName = trimmed.replace(/\(.*?\)/g, '').trim(); // Remove parentheticals like (V.O.)
+            if (!characterMap.has(characterName)) {
+              characterMap.set(characterName, {
+                id: Date.now().toString() + Math.random(),
+                name: characterName,
+                role: 'Character',
+                scenes: 0
+              });
+            }
+          }
+        }
+      });
+      
+      // Save last scene
+      if (currentScene) {
+        const scene = currentScene as any;
+        if (scene.title && scene.location && scene.timeOfDay) {
+          extractedScenes.push({
+            number: scene.number || sceneCounter.toString(),
+            title: scene.title,
+            location: scene.location,
+            timeOfDay: scene.timeOfDay,
+            pageCount: 1,
+            elements: []
+          });
+        }
+      }
+      
+      // Update state with extracted data
+      if (extractedScenes.length > 0) {
+        setScenes(extractedScenes);
+        toast.success(`Found ${extractedScenes.length} scene${extractedScenes.length > 1 ? 's' : ''}!`);
+      }
+      
+      const extractedCharsList = Array.from(characterMap.values());
+      if (extractedCharsList.length > 0) {
+        setCharacters(extractedCharsList);
+        toast.success(`Identified ${extractedCharsList.length} character${extractedCharsList.length > 1 ? 's' : ''}!`);
+      }
+      
+      if (extractedScenes.length === 0 && extractedCharsList.length === 0) {
+        toast.error('No scenes or characters detected. Make sure your script uses standard formatting (INT./EXT. for scene headings).');
+      }
+      
+    } catch (error) {
+      console.error('AI breakdown failed:', error);
+      toast.error('Failed to analyze screenplay. Please check the format.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="h-full flex flex-col">
@@ -241,11 +537,28 @@ const ScriptBreakdownPage = () => {
             </div>
 
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleAIBreakdown}
+                disabled={isAnalyzing || !scriptContent.trim()}
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                {isAnalyzing ? 'Analyzing...' : 'AI Breakdown'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleSaveScript}
+              >
                 <Save className="w-4 h-4 mr-2" />
                 Save Draft
               </Button>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleExportPDF}
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Export PDF
               </Button>
@@ -415,7 +728,21 @@ const ScriptBreakdownPage = () => {
                         fontFamily: 'Courier New, monospace',
                         lineHeight: '1.6',
                       }}
-                      placeholder="Start writing your script here..."
+                      placeholder="Paste your screenplay here...
+
+Example format:
+
+INT. COFFEE SHOP - DAY
+
+JOHN enters the coffee shop and walks to the counter.
+
+JOHN
+Can I get a large coffee?
+
+BARISTA
+Coming right up!
+
+Then click 'AI Breakdown' to analyze scenes and characters."
                     />
                   </div>
                 </CardContent>
@@ -496,16 +823,45 @@ const ScriptBreakdownPage = () => {
 
               {/* Version History */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Version History</h3>
+                <h3 className="font-semibold text-gray-900 mb-3">History</h3>
                 <div className="space-y-2">
-                  <div className="p-3 bg-white rounded border">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-medium text-sm">Version 1.0</span>
-                      <span className="text-xs text-gray-600">Current</span>
+                  {versions.length === 0 ? (
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 text-center">
+                      <p className="text-xs text-gray-500">No saved versions yet</p>
+                      <p className="text-xs text-gray-400 mt-1">Click "Save Draft" to create version</p>
                     </div>
-                    <p className="text-xs text-gray-600">Initial script draft</p>
-                    <p className="text-xs text-gray-500">Today, 2:30 PM</p>
-                  </div>
+                  ) : (
+                    versions.slice().reverse().map((version) => (
+                      <div 
+                        key={version.id} 
+                        className={`p-3 rounded border cursor-pointer transition-all ${
+                          version.isCurrent 
+                            ? 'bg-blue-50 border-blue-300' 
+                            : 'bg-white border-gray-200 hover:border-blue-200 hover:bg-blue-25'
+                        }`}
+                        onClick={() => handleLoadVersion(version)}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-medium text-sm">Version {version.version}</span>
+                          {version.isCurrent && (
+                            <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded">Current</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-600">
+                          {version.characters.length} character{version.characters.length !== 1 ? 's' : ''}, {version.scenes.length} scene{version.scenes.length !== 1 ? 's' : ''}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(version.timestamp).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          })}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

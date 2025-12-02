@@ -773,6 +773,207 @@ class BudgetController {
       });
     }
   }
+
+  // Add expense to project budget (frontend-compatible)
+  async addExpenseToProject(req, res) {
+    try {
+      const { projectId } = req.params;
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      const hasAccess = project.hasPermission(req.user.userId, 'write');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      // Get or create budget for project
+      let budget = await Budget.findOne({ project: projectId });
+      
+      if (!budget) {
+        // Create default budget if none exists
+        budget = new Budget({
+          project: projectId,
+          title: `${project.title} Budget`,
+          currency: 'USD',
+          totalBudget: 0,
+          createdBy: req.user.userId
+        });
+      }
+
+      const expenseData = {
+        ...req.body,
+        createdBy: req.user.userId,
+        date: req.body.date || new Date()
+      };
+
+      budget.expenses.push(expenseData);
+      await budget.save();
+
+      const addedExpense = budget.expenses[budget.expenses.length - 1];
+
+      res.status(201).json({
+        success: true,
+        message: 'Expense added successfully',
+        data: addedExpense
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // Update expense in project budget (frontend-compatible)
+  async updateExpenseInProject(req, res) {
+    try {
+      const { projectId, itemId } = req.params;
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      const hasAccess = project.hasPermission(req.user.userId, 'write');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      const budget = await Budget.findOne({ project: projectId });
+      if (!budget) {
+        return res.status(404).json({
+          success: false,
+          message: 'Budget not found'
+        });
+      }
+
+      const expense = budget.expenses.id(itemId);
+      if (!expense) {
+        return res.status(404).json({
+          success: false,
+          message: 'Expense not found'
+        });
+      }
+
+      Object.assign(expense, req.body);
+      await budget.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Expense updated successfully',
+        data: expense
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // Delete expense from project budget (frontend-compatible)
+  async deleteExpenseFromProject(req, res) {
+    try {
+      const { projectId, itemId } = req.params;
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      const hasAccess = project.hasPermission(req.user.userId, 'delete');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      const budget = await Budget.findOne({ project: projectId });
+      if (!budget) {
+        return res.status(404).json({
+          success: false,
+          message: 'Budget not found'
+        });
+      }
+
+      budget.expenses.id(itemId).remove();
+      await budget.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Expense deleted successfully'
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // Update project budget (frontend-compatible)
+  async updateProjectBudget(req, res) {
+    try {
+      const { projectId } = req.params;
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      const hasAccess = project.hasPermission(req.user.userId, 'write');
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      const budget = await Budget.findOne({ project: projectId });
+      if (!budget) {
+        return res.status(404).json({
+          success: false,
+          message: 'Budget not found'
+        });
+      }
+
+      Object.assign(budget, req.body);
+      await budget.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Budget updated successfully',
+        data: budget
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
 }
 
 module.exports = new BudgetController();

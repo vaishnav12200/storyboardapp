@@ -49,66 +49,12 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { useAppDispatch, useAppSelector } from '@/lib/store';
+import { fetchShotLists, createShot, updateShot, deleteShot } from '@/lib/store/shotlistSlice';
+import type { Shot } from '@/lib/store/shotlistSlice';
+import { toast } from 'react-hot-toast';
 
-interface AudioSettings {
-  sync: boolean;
-  wildTrack?: boolean;
-  roomTone?: boolean;
-  notes?: string;
-}
 
-interface VfxSettings {
-  required: boolean;
-  type?: string;
-  notes?: string;
-}
-
-interface Take {
-  takeNumber: number;
-  status: 'good' | 'bad' | 'ok' | 'print';
-  duration: number;
-  notes: string;
-}
-
-interface Reference {
-  id: string;
-  type: 'image' | 'video' | 'document';
-  url: string;
-  description: string;
-}
-
-interface Shot {
-  id: string;
-  shotNumber: string;
-  sceneNumber: string;
-  description: string;
-  shotType: 'ECU' | 'CU' | 'MCU' | 'MS' | 'MLS' | 'LS' | 'ELS' | 'POV' | 'OTS' | 'TWO_SHOT' | 'GROUP' | 'INSERT' | 'CUTAWAY';
-  cameraMovement: 'static' | 'pan' | 'tilt' | 'zoom' | 'dolly' | 'handheld' | 'steadicam' | 'crane' | 'drone';
-  cameraAngle: 'eye_level' | 'high' | 'low' | 'birds_eye' | 'worms_eye' | 'dutch';
-  lens?: string;
-  aperture?: string;
-  frameRate: number;
-  duration: number;
-  location: string;
-  setup?: string;
-  lighting?: string;
-  audio: AudioSettings;
-  crew?: string[];
-  equipment?: string[];
-  props?: string[];
-  costumes?: string[];
-  makeup?: string[];
-  vfx: VfxSettings;
-  status: 'planned' | 'ready' | 'shooting' | 'completed' | 'review' | 'approved';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  scheduledDate?: string;
-  scheduledTime?: string;
-  actualDuration?: number;
-  takes?: Take[];
-  complexity: 'simple' | 'medium' | 'complex';
-  references?: Reference[];
-  estimatedCost?: number;
-}
 
 const ShotlistPage = () => {
   useRequireAuth();
@@ -116,7 +62,17 @@ const ShotlistPage = () => {
   const projectId = params.projectId as string;
   const { project, isLoading } = useCurrentProject(projectId);
 
-  const [shots, setShots] = useState<Shot[]>([]);
+  // Redux hooks
+  const dispatch = useAppDispatch();
+  const { shotLists, shots, isLoading: shotListLoading } = useAppSelector((state) => state.shotlist);
+
+  // Fetch shot lists on component mount
+  useEffect(() => {
+    if (projectId) {
+      dispatch(fetchShotLists(projectId));
+    }
+  }, [projectId, dispatch]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [shotTypeFilter, setShotTypeFilter] = useState<string>('all');
@@ -127,104 +83,102 @@ const ShotlistPage = () => {
   const [showAddShot, setShowAddShot] = useState(false);
   const [showShotDetails, setShowShotDetails] = useState(false);
   const [newShotNumber, setNewShotNumber] = useState('');
-  const [newSceneNumber, setNewSceneNumber] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newShotType, setNewShotType] = useState<'ECU' | 'CU' | 'MCU' | 'MS' | 'MLS' | 'LS' | 'ELS' | 'POV' | 'OTS' | 'TWO_SHOT' | 'GROUP' | 'INSERT' | 'CUTAWAY'>('MS');
-  const [newCameraMovement, setNewCameraMovement] = useState<'static' | 'pan' | 'tilt' | 'zoom' | 'dolly' | 'handheld' | 'steadicam' | 'crane' | 'drone'>('static');
+  const [newShotType, setNewShotType] = useState<'wide' | 'medium' | 'close-up' | 'extreme-close-up' | 'insert' | 'cutaway' | 'establishing' | 'master'>('medium');
+  const [newCameraMovement, setNewCameraMovement] = useState<'static' | 'pan' | 'tilt' | 'zoom' | 'dolly' | 'track' | 'handheld' | 'steadicam'>('static');
   const [newLocation, setNewLocation] = useState('');
   const [editingShot, setEditingShot] = useState<Shot | null>(null);
 
   // Initialize shots data
   useEffect(() => {
-    if (project) {
-      const initialShots: Shot[] = [];
-      setShots(initialShots);
-    }
+    // Data is now fetched via Redux
   }, [project]);
 
-  const handleAddShot = () => {
-    if (newShotNumber.trim() && newSceneNumber.trim() && newDescription.trim()) {
+  const handleAddShot = async () => {
+    if (newShotNumber.trim() && newDescription.trim()) {
       if (editingShot) {
         // Update existing shot
-        const updatedShots = shots.map(shot =>
-          shot.id === editingShot.id
-            ? {
-                ...shot,
-                shotNumber: newShotNumber.trim(),
-                sceneNumber: newSceneNumber.trim(),
-                description: newDescription.trim(),
-                shotType: newShotType,
-                cameraMovement: newCameraMovement,
-                location: newLocation.trim() || 'TBD'
-              }
-            : shot
-        );
-        setShots(updatedShots);
-        setEditingShot(null);
+        try {
+          const shotData = {
+            shotNumber: newShotNumber.trim(),
+            description: newDescription.trim(),
+            shotType: newShotType,
+            movement: newCameraMovement,
+            location: newLocation.trim() || undefined
+          };
+          await dispatch(updateShot({ 
+            projectId, 
+            shotId: editingShot._id || editingShot.id || '', 
+            shotData 
+          })).unwrap();
+          setEditingShot(null);
+          toast.success('Shot updated successfully!');
+        } catch (error: any) {
+          toast.error(error || 'Failed to update shot');
+        }
       } else {
         // Add new shot
-        const newShot: Shot = {
-          id: Date.now().toString(),
-          shotNumber: newShotNumber.trim(),
-          sceneNumber: newSceneNumber.trim(),
-          description: newDescription.trim(),
-          shotType: newShotType,
-          cameraMovement: newCameraMovement,
-          cameraAngle: 'eye_level',
-          frameRate: 24,
-          duration: 30, // default 30 seconds
-          location: newLocation.trim() || 'TBD',
-          audio: { sync: true },
-          vfx: { required: false },
-          status: 'planned',
-          priority: 'medium',
-          complexity: 'medium'
-        };
-
-        setShots([...shots, newShot]);
+        try {
+          const shotData = {
+            shotNumber: newShotNumber.trim(),
+            description: newDescription.trim(),
+            shotType: newShotType,
+            cameraAngle: 'eye-level' as const,
+            movement: newCameraMovement,
+            duration: 30, // default 30 seconds
+            location: newLocation.trim() || undefined,
+            status: 'planned' as const,
+            priority: 'medium' as const
+          };
+          
+          await dispatch(createShot({ projectId, shotData })).unwrap();
+          toast.success('Shot added successfully!');
+        } catch (error: any) {
+          toast.error(error || 'Failed to add shot');
+        }
       }
 
       // Reset form
       setNewShotNumber('');
-      setNewSceneNumber('');
       setNewDescription('');
-      setNewShotType('MS');
+      setNewShotType('medium');
       setNewCameraMovement('static');
       setNewLocation('');
       setShowAddShot(false);
+    } else {
+      toast.error('Please fill in shot number and description');
     }
   };
 
   const handleEditShot = (shot: Shot) => {
     setEditingShot(shot);
     setNewShotNumber(shot.shotNumber);
-    setNewSceneNumber(shot.sceneNumber);
     setNewDescription(shot.description);
     setNewShotType(shot.shotType);
-    setNewCameraMovement(shot.cameraMovement);
-    setNewLocation(shot.location);
+    setNewCameraMovement(shot.movement || 'static');
+    setNewLocation(shot.location || '');
     setShowAddShot(true);
   };
 
-  const handleDeleteShot = (shotId: string) => {
-    setShots(shots.filter(shot => shot.id !== shotId));
+  const handleDeleteShot = async (shotId: string) => {
+    try {
+      await dispatch(deleteShot({ projectId, shotId })).unwrap();
+      toast.success('Shot deleted successfully!');
+    } catch (error) {
+      toast.error('Failed to delete shot');
+    }
   };
 
   const getShotTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      'ECU': 'Extreme Close-Up',
-      'CU': 'Close-Up',
-      'MCU': 'Medium Close-Up',
-      'MS': 'Medium Shot',
-      'MLS': 'Medium Long Shot',
-      'LS': 'Long Shot',
-      'ELS': 'Extreme Long Shot',
-      'POV': 'Point of View',
-      'OTS': 'Over the Shoulder',
-      'TWO_SHOT': 'Two Shot',
-      'GROUP': 'Group Shot',
-      'INSERT': 'Insert',
-      'CUTAWAY': 'Cutaway',
+      'wide': 'Wide Shot',
+      'medium': 'Medium Shot',
+      'close-up': 'Close-Up',
+      'extreme-close-up': 'Extreme Close-Up',
+      'insert': 'Insert',
+      'cutaway': 'Cutaway',
+      'establishing': 'Establishing Shot',
+      'master': 'Master Shot',
     };
     return labels[type] || type;
   };
@@ -235,14 +189,12 @@ const ShotlistPage = () => {
         return <Clock className="w-4 h-4 text-gray-500" />;
       case 'ready':
         return <CheckCircle className="w-4 h-4 text-blue-500" />;
-      case 'shooting':
+      case 'in-progress':
         return <Video className="w-4 h-4 text-orange-500" />;
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'review':
-        return <Eye className="w-4 h-4 text-yellow-500" />;
-      case 'approved':
-        return <Star className="w-4 h-4 text-purple-500" />;
+      case 'cancelled':
+        return <AlertTriangle className="w-4 h-4 text-red-500" />;
       default:
         return <Clock className="w-4 h-4 text-gray-500" />;
     }
@@ -266,7 +218,7 @@ const ShotlistPage = () => {
   const filteredShots = shots.filter(shot => {
     const matchesSearch = shot.shotNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          shot.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         shot.location.toLowerCase().includes(searchTerm.toLowerCase());
+                         (shot.location && shot.location.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || shot.status === statusFilter;
     const matchesShotType = shotTypeFilter === 'all' || shot.shotType === shotTypeFilter;
     const matchesPriority = priorityFilter === 'all' || shot.priority === priorityFilter;
@@ -278,8 +230,6 @@ const ShotlistPage = () => {
     switch (sortBy) {
       case 'shotNumber':
         return a.shotNumber.localeCompare(b.shotNumber);
-      case 'sceneNumber':
-        return a.sceneNumber.localeCompare(b.sceneNumber);
       case 'status':
         return a.status.localeCompare(b.status);
       case 'priority':
@@ -287,9 +237,7 @@ const ShotlistPage = () => {
         return (priorityOrder[b.priority as keyof typeof priorityOrder] || 0) - 
                (priorityOrder[a.priority as keyof typeof priorityOrder] || 0);
       case 'duration':
-        return b.duration - a.duration;
-      case 'estimatedCost':
-        return (b.estimatedCost || 0) - (a.estimatedCost || 0);
+        return (b.duration || 0) - (a.duration || 0);
       default:
         return 0;
     }
@@ -373,7 +321,7 @@ const ShotlistPage = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Duration</p>
                   <p className="text-2xl font-bold text-purple-600">
-                    {Math.round(shots.reduce((acc, shot) => acc + shot.duration, 0))}m
+                    {Math.round(shots.reduce((acc, shot) => acc + (shot.duration || 0), 0))}s
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
@@ -387,9 +335,9 @@ const ShotlistPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Estimated Cost</p>
+                  <p className="text-sm font-medium text-gray-600">Total Shots</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    ${shots.reduce((acc, shot) => acc + (shot.estimatedCost || 0), 0).toLocaleString()}
+                    {shots.length}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
@@ -429,10 +377,9 @@ const ShotlistPage = () => {
                 <option value="all">All Status</option>
                 <option value="planned">Planned</option>
                 <option value="ready">Ready</option>
-                <option value="shooting">Shooting</option>
+                <option value="in-progress">In Progress</option>
                 <option value="completed">Completed</option>
-                <option value="review">Review</option>
-                <option value="approved">Approved</option>
+                <option value="cancelled">Cancelled</option>
               </select>
 
               <select
@@ -441,19 +388,14 @@ const ShotlistPage = () => {
                 onChange={(e) => setShotTypeFilter(e.target.value)}
               >
                 <option value="all">All Shot Types</option>
-                <option value="ECU">Extreme Close-Up</option>
-                <option value="CU">Close-Up</option>
-                <option value="MCU">Medium Close-Up</option>
-                <option value="MS">Medium Shot</option>
-                <option value="MLS">Medium Long Shot</option>
-                <option value="LS">Long Shot</option>
-                <option value="ELS">Extreme Long Shot</option>
-                <option value="POV">Point of View</option>
-                <option value="OTS">Over the Shoulder</option>
-                <option value="TWO_SHOT">Two Shot</option>
-                <option value="GROUP">Group Shot</option>
-                <option value="INSERT">Insert</option>
-                <option value="CUTAWAY">Cutaway</option>
+                <option value="wide">Wide Shot</option>
+                <option value="medium">Medium Shot</option>
+                <option value="close-up">Close-Up</option>
+                <option value="extreme-close-up">Extreme Close-Up</option>
+                <option value="insert">Insert</option>
+                <option value="cutaway">Cutaway</option>
+                <option value="establishing">Establishing</option>
+                <option value="master">Master</option>
               </select>
 
               <select
@@ -474,11 +416,9 @@ const ShotlistPage = () => {
                 onChange={(e) => setSortBy(e.target.value)}
               >
                 <option value="shotNumber">Sort by Shot Number</option>
-                <option value="sceneNumber">Sort by Scene</option>
                 <option value="status">Sort by Status</option>
                 <option value="priority">Sort by Priority</option>
                 <option value="duration">Sort by Duration</option>
-                <option value="estimatedCost">Sort by Cost</option>
               </select>
             </div>
           </CardContent>
@@ -533,9 +473,11 @@ const ShotlistPage = () => {
                           <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
                             {shot.shotNumber}
                           </span>
-                          <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm">
-                            Scene {shot.sceneNumber}
-                          </span>
+                          {shot.sceneId && (
+                            <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm">
+                              Scene {shot.sceneId}
+                            </span>
+                          )}
                           <div className="flex items-center gap-1">
                             {getStatusIcon(shot.status)}
                             <span className="text-sm text-gray-600 capitalize">{shot.status}</span>
@@ -552,29 +494,19 @@ const ShotlistPage = () => {
                             <Target className="w-4 h-4" />
                             <span>{getShotTypeLabel(shot.shotType)}</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4" />
-                            <span>{shot.location}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4" />
-                            <span>{shot.duration}s</span>
-                          </div>
-                          {shot.estimatedCost && (
+                          {shot.location && (
                             <div className="flex items-center gap-2">
-                              <span>💰</span>
-                              <span>${shot.estimatedCost.toLocaleString()}</span>
+                              <MapPin className="w-4 h-4" />
+                              <span>{shot.location}</span>
+                            </div>
+                          )}
+                          {shot.duration && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4" />
+                              <span>{shot.duration}s</span>
                             </div>
                           )}
                         </div>
-
-                        {shot.scheduledDate && (
-                          <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
-                            <Calendar className="w-4 h-4" />
-                            <span>📅 {new Date(shot.scheduledDate).toLocaleDateString()}</span>
-                            {shot.scheduledTime && <span>🕐 {shot.scheduledTime}</span>}
-                          </div>
-                        )}
                       </div>
                       
                       <div className="flex items-center gap-2 ml-4">
@@ -594,7 +526,7 @@ const ShotlistPage = () => {
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteShot(shot.id);
+                            handleDeleteShot(shot._id || shot.id || '');
                           }}
                           className="text-red-600 hover:text-red-700"
                           title="Delete shot"
@@ -641,31 +573,17 @@ const ShotlistPage = () => {
               
               <div className="p-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Shot Number
-                      </label>
-                      <input
-                        type="text"
-                        value={newShotNumber}
-                        onChange={(e) => setNewShotNumber(e.target.value)}
-                        placeholder="e.g. 1A, 2B, 3C"
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Scene Number
-                      </label>
-                      <input
-                        type="text"
-                        value={newSceneNumber}
-                        onChange={(e) => setNewSceneNumber(e.target.value)}
-                        placeholder="e.g. 1, 2, 3"
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Shot Number
+                    </label>
+                    <input
+                      type="text"
+                      value={newShotNumber}
+                      onChange={(e) => setNewShotNumber(e.target.value)}
+                      placeholder="e.g. 1A, 2B, 3C"
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -689,19 +607,14 @@ const ShotlistPage = () => {
                         onChange={(e) => setNewShotType(e.target.value as any)}
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                       >
-                        <option value="ECU">Extreme Close-Up</option>
-                        <option value="CU">Close-Up</option>
-                        <option value="MCU">Medium Close-Up</option>
-                        <option value="MS">Medium Shot</option>
-                        <option value="MLS">Medium Long Shot</option>
-                        <option value="LS">Long Shot</option>
-                        <option value="ELS">Extreme Long Shot</option>
-                        <option value="POV">POV</option>
-                        <option value="OTS">Over The Shoulder</option>
-                        <option value="TWO_SHOT">Two Shot</option>
-                        <option value="GROUP">Group Shot</option>
-                        <option value="INSERT">Insert</option>
-                        <option value="CUTAWAY">Cutaway</option>
+                        <option value="wide">Wide Shot</option>
+                        <option value="medium">Medium Shot</option>
+                        <option value="close-up">Close-Up</option>
+                        <option value="extreme-close-up">Extreme Close-Up</option>
+                        <option value="insert">Insert</option>
+                        <option value="cutaway">Cutaway</option>
+                        <option value="establishing">Establishing</option>
+                        <option value="master">Master</option>
                       </select>
                     </div>
                     <div>
@@ -718,10 +631,9 @@ const ShotlistPage = () => {
                         <option value="tilt">Tilt</option>
                         <option value="zoom">Zoom</option>
                         <option value="dolly">Dolly</option>
+                        <option value="track">Track</option>
                         <option value="handheld">Handheld</option>
                         <option value="steadicam">Steadicam</option>
-                        <option value="crane">Crane</option>
-                        <option value="drone">Drone</option>
                       </select>
                     </div>
                   </div>

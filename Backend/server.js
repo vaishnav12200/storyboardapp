@@ -27,7 +27,7 @@ const exportRoutes = require('./routes/exportRoutes');
 app.use(helmet());
 app.use(compression());
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://192.168.1.36:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -67,6 +67,16 @@ app.get('/health', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
+  });
+});
+
+// Test endpoint to check MongoDB connection
+app.get('/api/test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API is working!',
+    mongodb: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    database: mongoose.connection.name
   });
 });
 
@@ -115,31 +125,17 @@ const connectDB = async () => {
     
     let mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cinecore';
     
-    // Try local MongoDB first
-    try {
-      await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 10000,
-      });
-      console.log('✅ Connected to MongoDB');
-      console.log('📱 CineCore API ready!');
-      return;
-    } catch (localError) {
-      console.log('⚠️ Local MongoDB not available, using in-memory database');
-      
-      // Fallback to in-memory MongoDB
-      const { MongoMemoryServer } = require('mongodb-memory-server');
-      const mongod = new MongoMemoryServer();
-      await mongod.start();
-      const uri = mongod.getUri();
-      
-      await mongoose.connect(uri, {
-        serverSelectionTimeoutMS: 5000,
-      });
-      
-      console.log('✅ Connected to in-memory MongoDB');
-      console.log('📱 CineCore API ready with temporary database!');
-    }
+    // Connect directly to MongoDB Atlas (no fallback to local)
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 15000,
+      retryWrites: true,
+      w: 'majority'
+    });
+    console.log('✅ Connected to MongoDB Atlas');
+    console.log('🗄️ Database:', mongoUri.split('/').pop().split('?')[0]);
+    console.log('📱 CineCore API ready!');
   } catch (err) {
     console.log('❌ Database connection failed:', err.message);
     console.log('🔄 Retrying in 5 seconds...');

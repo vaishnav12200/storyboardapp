@@ -19,7 +19,15 @@ const projectSchema = new mongoose.Schema({
   },
   genre: {
     type: String,
-    enum: ['action', 'comedy', 'drama', 'horror', 'romance', 'thriller', 'sci-fi', 'fantasy', 'documentary', 'other']
+    trim: true
+  },
+  director: {
+    type: String,
+    trim: true
+  },
+  producer: {
+    type: String,
+    trim: true
   },
   status: {
     type: String,
@@ -110,6 +118,43 @@ const projectSchema = new mongoose.Schema({
       default: '1920x1080'
     }
   },
+  scriptContent: {
+    type: String,
+    default: ''
+  },
+  characters: [{
+    id: String,
+    name: String,
+    role: String,
+    scenes: Number
+  }],
+  scriptVersions: [{
+    id: String,
+    version: String,
+    content: String,
+    scenes: [{
+      number: String,
+      title: String,
+      location: String,
+      timeOfDay: String,
+      pageCount: Number,
+      elements: [String]
+    }],
+    characters: [{
+      id: String,
+      name: String,
+      role: String,
+      scenes: Number
+    }],
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    isCurrent: {
+      type: Boolean,
+      default: false
+    }
+  }],
   tags: [String],
   coverImage: String,
   files: [{

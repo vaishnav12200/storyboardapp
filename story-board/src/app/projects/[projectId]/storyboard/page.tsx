@@ -3,6 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'next/navigation';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/lib/store';
+import { 
+  fetchScenes, 
+  createScene, 
+  createPanel, 
+  updatePanel, 
+  deletePanel,
+  generatePanelImage,
+  setCurrentScene 
+} from '@/lib/store/storyboardSlice';
 import {
   Plus,
   Grid,
@@ -106,83 +117,71 @@ const StoryboardPage = () => {
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  // Load user's actual storyboard data
-  useEffect(() => {
-    const loadStoryboardData = async () => {
-      if (project) {
-        try {
-          const { storyboardApi } = await import('@/lib/api/storyboard');
-          const result = await storyboardApi.getScenes(projectId);
-          
-          console.log('API Response:', result);
-          console.log('result.data:', result.data);
-          console.log('result.data.scenes:', result.data?.scenes);
-          
-          if (result.success && result.data) {
-            // Handle both paginated and direct array responses
-            const scenesArray = result.data.scenes || result.data;
-            console.log('scenesArray:', scenesArray);
-            
-            if (Array.isArray(scenesArray)) {
-              console.log('Processing scenes array:', scenesArray);
-              // Convert backend scenes to frontend format
-              const convertedScenes: Scene[] = scenesArray.map((backendScene: any) => {
-                console.log('Processing scene:', backendScene);
-                return {
-              id: backendScene._id,
-              sceneNumber: backendScene.sceneNumber,
-              title: backendScene.title,
-              description: backendScene.description,
-              location: {
-                name: backendScene.location?.name || backendScene.location || 'Location',
-                type: backendScene.location?.type === 'exterior' ? 'EXT' : 'INT',
-                timeOfDay: (backendScene.location?.timeOfDay || backendScene.timeOfDay || 'day').toUpperCase() as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK',
-              },
-              storyboard: {
-                panels: backendScene.storyboard?.panels?.map((panel: any) => ({
-                  id: panel._id,
-                  panelNumber: panel.panelNumber,
-                  image: panel.image,
-                  imageSource: panel.imageSource,
-                  description: panel.description,
-                  shotType: panel.shotType || 'medium-shot',
-                  cameraMovement: panel.cameraMovement || 'static',
-                  angle: panel.angle || 'eye-level',
-                  duration: panel.duration,
-                  notes: panel.notes,
-                })) || [],
-                totalPanels: backendScene.storyboard?.panels?.length || 0,
-              },
-            };
-              });
-              
-              console.log('Converted scenes:', convertedScenes);
-            
-              // Temporarily disable to prevent crash
-              setScenes([]);
-              
-              // Select first scene if available
-              if (convertedScenes.length > 0) {
-                setSelectedSceneId(convertedScenes[0].id);
-              }
-            } else {
-              console.log('Scenes data is not an array:', scenesArray);
-              setScenes([]);
-            }
-          } else {
-            console.log('API call failed or no data:', result);
-            setScenes([]);
-          }
-        } catch (error) {
-          console.error('Error loading storyboard data:', error);
-          // Start with empty state if API fails
-          setScenes([]);
-        }
-      }
-    };
+  // Load storyboard data from Redux store (persisted in backend)
+  const dispatch = useDispatch();
+  const storyboardState = useSelector((state: RootState) => state.storyboard);
 
-    loadStoryboardData();
-  }, [project, projectId]);
+  useEffect(() => {
+    if (project) {
+      // Fetch scenes for the current project and populate the store
+      // Note: thunk returns a promise; casting to any to satisfy TypeScript in this file
+      dispatch(fetchScenes(projectId as string) as any);
+    }
+  }, [project, projectId, dispatch]);
+
+  // Sync local UI state with Redux store changes
+  useEffect(() => {
+    if (storyboardState && storyboardState.scenes !== undefined) {
+      if (Array.isArray(storyboardState.scenes)) {
+        // Transform Redux scenes to match UI Scene interface
+        const transformedScenes = storyboardState.scenes.map((reduxScene: any) => {
+          // Get time of day and ensure it's uppercase
+          const timeOfDay = reduxScene.timeOfDay 
+            ? String(reduxScene.timeOfDay).toUpperCase() 
+            : 'DAY';
+          
+          // Get location type
+          const locationType = reduxScene.location?.type 
+            ? String(reduxScene.location.type).toUpperCase()
+            : (reduxScene.interior === false ? 'EXT' : 'INT');
+          
+          return {
+            id: reduxScene._id || reduxScene.id,
+            sceneNumber: reduxScene.sceneNumber,
+            title: reduxScene.title,
+            location: {
+              name: String(reduxScene.location?.name || reduxScene.location || 'New Location'),
+              type: locationType as 'INT' | 'EXT',
+              timeOfDay: timeOfDay as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK'
+            },
+            description: reduxScene.description || '',
+            storyboard: {
+              panels: (reduxScene.storyboard?.panels || reduxScene.panels || []).map((panel: any) => ({
+                id: panel._id || panel.id,
+                panelNumber: panel.panelNumber,
+                image: panel.image || panel.imageUrl,
+                description: panel.description || '',
+                shotType: panel.shotType || 'medium-shot',
+                cameraMovement: panel.cameraMovement || 'static',
+                angle: panel.angle || panel.cameraAngle || 'eye-level',
+                duration: panel.duration,
+                notes: panel.notes
+              })),
+              totalPanels: (reduxScene.storyboard?.panels || reduxScene.panels || []).length
+            }
+          };
+        });
+        
+        setScenes(transformedScenes);
+        if (transformedScenes.length > 0 && !selectedSceneId) {
+          setSelectedSceneId(transformedScenes[0].id);
+        }
+      } else {
+        // If scenes is not an array, set to empty array
+        setScenes([]);
+      }
+    }
+  }, [storyboardState, storyboardState?.scenes]);
 
   const selectedScene = scenes.find(scene => scene.id === selectedSceneId);
   const selectedPanel = selectedScene?.storyboard.panels.find(panel => panel.id === selectedPanelId);
@@ -202,48 +201,28 @@ const StoryboardPage = () => {
         return;
       }
 
-      const { storyboardApi } = await import('@/lib/api/storyboard');
-      
       const panelData = {
         panelNumber: selectedScene.storyboard.panels.length + 1,
         description: 'New panel description',
         shotType: 'medium-shot',
-        cameraAngle: 'static',
+        cameraMovement: 'static',
+        angle: 'eye-level'
       };
 
       console.log('Creating panel with data:', { projectId, sceneId: selectedScene.id, panelData });
       
-      const result = await storyboardApi.createPanel(projectId, selectedScene.id, panelData);
+      // Use Redux action to create panel (this will save to backend)
+      const result = await dispatch(createPanel({ 
+        projectId, 
+        sceneId: selectedScene.id, 
+        panelData 
+      }) as any).unwrap();
       
-      if (result.success && result.data) {
-        const newPanel: StoryboardPanel = {
-          id: result.data._id,
-          panelNumber: result.data.panelNumber,
-          image: result.data.image,
-          description: result.data.description,
-          shotType: result.data.shotType || 'medium-shot',
-          cameraMovement: result.data.cameraMovement || 'static',
-          angle: result.data.angle || 'eye-level',
-          duration: result.data.duration,
-          notes: result.data.notes,
-        };
-
-        setScenes(scenes.map(scene => 
-          scene.id === selectedSceneId
-            ? {
-                ...scene,
-                storyboard: {
-                  panels: [...scene.storyboard.panels, newPanel],
-                  totalPanels: scene.storyboard.totalPanels + 1,
-                },
-              }
-            : scene
-        ));
-
-        setSelectedPanelId(newPanel.id);
-        toast.success('Panel added successfully!');
-      } else {
-        throw new Error(result.message || 'Failed to create panel');
+      toast.success('Panel added successfully!');
+      
+      // Select the newly created panel
+      if (result && result.panel) {
+        setSelectedPanelId(result.panel._id || result.panel.id);
       }
     } catch (error: any) {
       console.error('Panel creation error:', error);
@@ -253,7 +232,7 @@ const StoryboardPage = () => {
       } else if (error.response?.status === 401) {
         toast.error('Authentication failed. Please log in again.');
       } else {
-        toast.error(`Failed to create panel: ${error.response?.data?.message || error.message}`);
+        toast.error(`Failed to create panel: ${error.response?.data?.message || error.message || error}`);
       }
     }
   };
@@ -430,12 +409,12 @@ const StoryboardPage = () => {
           title: result.data.title,
           description: result.data.description,
           location: {
-            name: result.data.location?.name || result.data.location || 'New Location',
-            type: result.data.location?.type === 'exterior' ? 'EXT' : 'INT',
-            timeOfDay: (result.data.location?.timeOfDay || result.data.timeOfDay || 'day').toUpperCase() as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK',
+            name: (result.data as any).location?.name || (result.data as any).location || 'New Location',
+            type: (result.data as any).location?.type === 'exterior' ? 'EXT' : 'INT',
+            timeOfDay: ((result.data as any).location?.timeOfDay || (result.data as any).timeOfDay || 'day').toUpperCase() as 'DAY' | 'NIGHT' | 'DAWN' | 'DUSK',
           },
           storyboard: {
-            panels: result.data.storyboard?.panels?.map((panel: any) => ({
+            panels: (result.data as any).storyboard?.panels?.map((panel: any) => ({
               id: panel._id,
               panelNumber: panel.panelNumber,
               image: panel.image,
@@ -446,7 +425,7 @@ const StoryboardPage = () => {
               duration: panel.duration,
               notes: panel.notes,
             })) || [],
-            totalPanels: result.data.panels?.length || 0,
+            totalPanels: (result.data as any).panels?.length || 0,
           },
         };
 
@@ -654,7 +633,7 @@ const StoryboardPage = () => {
                 <div className="flex-1 overflow-y-auto p-6">
                   {viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {selectedScene.storyboard.panels.map((panel) => (
+                      {selectedScene.storyboard.panels.map((panel, index) => (
                         <motion.div
                           key={panel.id}
                           whileHover={{ scale: 1.02 }}
@@ -718,6 +697,20 @@ const StoryboardPage = () => {
                                       AI
                                     </div>
                                   )}
+                                  {/* Preview button overlay */}
+                                  <button
+                                    className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 hover:opacity-100 rounded-lg"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCurrentPreviewIndex(index);
+                                      setShowPreview(true);
+                                    }}
+                                  >
+                                    <div className="bg-white text-gray-900 px-4 py-2 rounded-lg flex items-center gap-2 font-medium">
+                                      <Eye className="w-4 h-4" />
+                                      Preview
+                                    </div>
+                                  </button>
                                 </>
                               ) : (
                                 <div className="text-center">
@@ -1525,6 +1518,161 @@ const StoryboardPage = () => {
                     {isGenerating ? 'Generating...' : 'Generate Image'}
                   </Button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Preview Modal */}
+      <AnimatePresence>
+        {showPreview && selectedScene && selectedScene.storyboard.panels.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50"
+            onClick={() => setShowPreview(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative max-w-6xl w-full bg-gray-900 rounded-lg p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-white">
+                  <h3 className="text-xl font-semibold">
+                    Panel {selectedScene.storyboard.panels[currentPreviewIndex]?.panelNumber}
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    {currentPreviewIndex + 1} of {selectedScene.storyboard.panels.length}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<Download className="w-4 h-4" />}
+                    onClick={async () => {
+                      const panel = selectedScene.storyboard.panels[currentPreviewIndex];
+                      if (panel?.image) {
+                        try {
+                          // Fetch the image as a blob to handle CORS and external URLs
+                          const response = await fetch(panel.image);
+                          const blob = await response.blob();
+                          
+                          // Create a blob URL and download
+                          const blobUrl = window.URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = blobUrl;
+                          link.download = `panel-${panel.panelNumber}-${selectedScene.title.replace(/\s+/g, '-')}.png`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          
+                          // Clean up the blob URL
+                          window.URL.revokeObjectURL(blobUrl);
+                          
+                          toast.success('Panel image downloaded!');
+                        } catch (error) {
+                          console.error('Download failed:', error);
+                          toast.error('Failed to download image. Please try again.');
+                        }
+                      } else {
+                        toast.error('No image to download');
+                      }
+                    }}
+                    className="bg-white text-gray-900 hover:bg-gray-100"
+                  >
+                    Download
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowPreview(false)}
+                    className="text-white hover:bg-gray-800"
+                  >
+                    ×
+                  </Button>
+                </div>
+              </div>
+
+              {/* Image */}
+              <div className="mb-6 bg-black rounded-lg flex items-center justify-center" style={{ minHeight: '400px', maxHeight: '70vh' }}>
+                {selectedScene.storyboard.panels[currentPreviewIndex]?.image ? (
+                  <img
+                    src={selectedScene.storyboard.panels[currentPreviewIndex].image}
+                    alt={`Panel ${selectedScene.storyboard.panels[currentPreviewIndex].panelNumber}`}
+                    className="max-w-full max-h-full object-contain rounded-lg"
+                    crossOrigin="anonymous"
+                  />
+                ) : (
+                  <div className="text-center text-gray-400">
+                    <Camera className="w-16 h-16 mx-auto mb-4" />
+                    <p>No image available</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Panel Details */}
+              <div className="mb-6 text-white space-y-2">
+                <p className="text-gray-300">
+                  {selectedScene.storyboard.panels[currentPreviewIndex]?.description}
+                </p>
+                <div className="flex items-center gap-3 text-sm text-gray-400">
+                  <span className="bg-gray-800 px-3 py-1 rounded">
+                    {selectedScene.storyboard.panels[currentPreviewIndex]?.shotType.replace('-', ' ')}
+                  </span>
+                  <span className="bg-gray-800 px-3 py-1 rounded">
+                    {selectedScene.storyboard.panels[currentPreviewIndex]?.cameraMovement}
+                  </span>
+                  <span className="bg-gray-800 px-3 py-1 rounded">
+                    {selectedScene.storyboard.panels[currentPreviewIndex]?.angle.replace('-', ' ')}
+                  </span>
+                  {selectedScene.storyboard.panels[currentPreviewIndex]?.duration && (
+                    <span className="bg-gray-800 px-3 py-1 rounded">
+                      {selectedScene.storyboard.panels[currentPreviewIndex].duration}s
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <div className="flex items-center justify-center gap-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<SkipBack className="w-4 h-4" />}
+                  onClick={() => {
+                    if (currentPreviewIndex > 0) {
+                      setCurrentPreviewIndex(currentPreviewIndex - 1);
+                    }
+                  }}
+                  disabled={currentPreviewIndex === 0}
+                  className="bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Previous
+                </Button>
+                <span className="text-white text-sm">
+                  {currentPreviewIndex + 1} / {selectedScene.storyboard.panels.length}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  rightIcon={<SkipForward className="w-4 h-4" />}
+                  onClick={() => {
+                    if (currentPreviewIndex < selectedScene.storyboard.panels.length - 1) {
+                      setCurrentPreviewIndex(currentPreviewIndex + 1);
+                    }
+                  }}
+                  disabled={currentPreviewIndex === selectedScene.storyboard.panels.length - 1}
+                  className="bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Next
+                </Button>
               </div>
             </motion.div>
           </motion.div>
