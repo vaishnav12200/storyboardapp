@@ -34,7 +34,7 @@ import toast from 'react-hot-toast';
 const DashboardPage = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+  const { user, isAuthenticated, isLoading: authLoading } = useAppSelector((state) => state.auth);
   const { projects, isLoading } = useAppSelector((state) => state.projects);
   const { modals, gridView } = useAppSelector((state) => state.ui);
 
@@ -43,11 +43,11 @@ const DashboardPage = () => {
 
   // Redirect if not authenticated
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       router.push('/login');
       return;
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, authLoading, router]);
 
   // Fetch projects on mount
   useEffect(() => {
@@ -101,6 +101,14 @@ const DashboardPage = () => {
       throw error; // Re-throw to let ProjectCard handle loading state
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return null; // Will redirect in useEffect

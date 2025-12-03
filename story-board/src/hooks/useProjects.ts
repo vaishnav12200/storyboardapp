@@ -118,7 +118,12 @@ export const useProjects = () => {
       return acc;
     }, {} as Record<string, number>);
     
-    const totalBudget = projects.reduce((sum, project) => sum + (project.budget || 0), 0);
+    const totalBudget = projects.reduce((sum, project) => {
+      const budgetValue = typeof project.budget === 'number' 
+        ? project.budget 
+        : project.budget?.total || 0;
+      return sum + budgetValue;
+    }, 0);
     
     return {
       total,

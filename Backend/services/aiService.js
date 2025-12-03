@@ -87,19 +87,15 @@ class AIService {
       styledPrompt = `${this.stylePresets[style].prefix}, ${prompt}, ${this.stylePresets[style].suffix}`;
     }
     
-    console.log('🎨 Generating AI image with style:', style);
-    console.log('📝 Styled prompt:', styledPrompt);
-    
     try {
       // Use Pollinations AI - reliable free service
       const cleanPrompt = encodeURIComponent(styledPrompt);
       const imageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=576&seed=${Math.floor(Math.random() * 1000000)}&model=flux&enhance=false&nologo=true`;
       
-      console.log('✅ Using Pollinations AI');
       return { imageUrl };
       
     } catch (error) {
-      console.log('⚠️ Pollinations failed, using placeholder');
+      console.error('Pollinations failed, using placeholder:', error.message);
       
       // Generate SVG placeholder only as last resort
       const svg = `<svg width="1024" height="576" xmlns="http://www.w3.org/2000/svg">
@@ -135,10 +131,6 @@ class AIService {
         this.buildEnhancedPrompt(prompt, { style, shotType, cameraMovement, location, timeOfDay, characters, mood }) : 
         prompt;
 
-      console.log(`🎨 Generating storyboard image with ${provider}...`);
-      console.log(`📝 Enhanced Prompt: ${enhancedPrompt}`);
-      console.log(`⚙️ Options:`, JSON.stringify(options, null, 2));
-
       let result;
       switch (provider) {
         case 'openai':
@@ -169,8 +161,9 @@ class AIService {
       }
 
       console.log('🎉 AI generation completed successfully!');
-      console.log('🖼️ Final image URL:', result.imageUrl);
-      
+          break;
+      }
+
       return {
         success: true,
         data: {
@@ -183,11 +176,7 @@ class AIService {
           generationId: uuidv4(),
           revisedPrompt: result.revisedPrompt || null
         }
-      };
-    } catch (error) {
-      console.error('❌ AI image generation failed:', error.message);
-      return {
-        success: false,
+      };success: false,
         message: error.message,
         provider: options.provider || 'stability'
       };

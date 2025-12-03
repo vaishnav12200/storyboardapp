@@ -238,8 +238,8 @@ export const locationsApi = {
     
     Object.entries(permit).forEach(([key, value]) => {
       if (key === 'document' && value) {
-        formData.append('document', value);
-      } else {
+        formData.append('document', value as File);
+      } else if (value !== null && value !== undefined) {
         formData.append(key, value.toString());
       }
     });

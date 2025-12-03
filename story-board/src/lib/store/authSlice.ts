@@ -6,7 +6,7 @@ const initialState: AuthState = {
   user: null,
   token: null,
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: true, // Start with loading true to check for existing session
   error: null,
 };
 
@@ -128,6 +128,10 @@ const authSlice = createSlice({
         state.error = action.payload as string;
       })
       // Load from storage cases
+      .addCase(loadUserFromStorage.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
       .addCase(loadUserFromStorage.fulfilled, (state, action) => {
         state.user = action.payload.user;
         state.token = action.payload.token;

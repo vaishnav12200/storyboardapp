@@ -23,13 +23,39 @@ const LoginPage = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [floatingElements, setFloatingElements] = useState<React.JSX.Element[]>([]);
+
+  // Initialize floating elements on client side only
+  useEffect(() => {
+    const elements = Array.from({ length: 6 }, (_, i) => (
+      <motion.div
+        key={i}
+        className={`absolute w-2 h-2 bg-primary-300 rounded-full opacity-20`}
+        animate={{
+          y: [0, -30, 0],
+          x: [0, Math.random() * 20 - 10, 0],
+          scale: [1, 1.2, 1],
+        }}
+        transition={{
+          duration: 3 + Math.random() * 2,
+          repeat: Infinity,
+          delay: Math.random() * 2,
+        }}
+        style={{
+          top: `${10 + Math.random() * 80}%`,
+          left: `${10 + Math.random() * 80}%`,
+        }}
+      />
+    ));
+    setFloatingElements(elements);
+  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!isLoading && isAuthenticated) {
       router.push('/dashboard');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isLoading, router]);
 
   // Clear errors on mount
   useEffect(() => {
@@ -76,28 +102,6 @@ const LoginPage = () => {
       setErrors(prev => ({ ...prev, [name]: undefined }));
     }
   };
-
-  // Floating elements animation
-  const floatingElements = Array.from({ length: 6 }, (_, i) => (
-    <motion.div
-      key={i}
-      className={`absolute w-2 h-2 bg-primary-300 rounded-full opacity-20`}
-      animate={{
-        y: [0, -30, 0],
-        x: [0, Math.random() * 20 - 10, 0],
-        scale: [1, 1.2, 1],
-      }}
-      transition={{
-        duration: 3 + Math.random() * 2,
-        repeat: Infinity,
-        delay: Math.random() * 2,
-      }}
-      style={{
-        top: `${10 + Math.random() * 80}%`,
-        left: `${10 + Math.random() * 80}%`,
-      }}
-    />
-  ));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-100 flex items-center justify-center p-4 relative overflow-hidden">

@@ -28,7 +28,6 @@ router.post('/login', loginValidation, authController.login);
 // Simple register without validation for testing
 router.post('/register-simple', async (req, res) => {
   try {
-    console.log('Simple registration request:', req.body);
     const { firstName, lastName, email, password, role = 'user' } = req.body;
     
     if (!firstName || !lastName || !email || !password) {

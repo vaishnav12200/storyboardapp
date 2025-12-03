@@ -8,12 +8,12 @@ export const useAuth = (requireAuth: boolean = false) => {
   const dispatch = useAppDispatch();
   const { user, isAuthenticated, isLoading, token } = useAppSelector((state) => state.auth);
 
-  useEffect(() => {
-    // Try to load user from storage on mount
-    if (!isAuthenticated && !isLoading) {
-      dispatch(loadUserFromStorage());
-    }
-  }, [dispatch, isAuthenticated, isLoading]);
+  // useEffect(() => {
+  //   // Try to load user from storage on mount
+  //   if (!isAuthenticated && !isLoading) {
+  //     dispatch(loadUserFromStorage());
+  //   }
+  // }, [dispatch, isAuthenticated, isLoading]);
 
   useEffect(() => {
     // Redirect logic

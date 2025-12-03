@@ -92,17 +92,10 @@ export const fetchLocations = createAsyncThunk(
   'locations/fetchLocations',
   async (projectId: string, { rejectWithValue }) => {
     try {
-      console.log('Fetching locations for project:', projectId);
       const response = await apiClient.get(`/location/projects/${projectId}`);
-      console.log('Locations fetch response:', response.data);
       const apiResponse = response.data as ApiResponse<{ locations: Location[] }>;
       return apiResponse.data?.locations || [];
     } catch (error: any) {
-      console.error('Locations fetch error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        projectId
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch locations');
     }
   }
@@ -118,17 +111,9 @@ export const createLocation = createAsyncThunk(
     locationData: Omit<Location, '_id' | 'projectId' | 'createdAt' | 'updatedAt'>;
   }, { rejectWithValue }) => {
     try {
-      console.log('Creating location:', { projectId, locationData });
       const response = await apiClient.post(`/location/projects/${projectId}`, locationData);
-      console.log('Location creation response:', response.data);
       return response.data as ApiResponse<Location>;
     } catch (error: any) {
-      console.error('Location creation error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        projectId,
-        locationData
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to create location');
     }
   }
@@ -144,17 +129,9 @@ export const updateLocation = createAsyncThunk(
     locationData: Partial<Location>;
   }, { rejectWithValue }) => {
     try {
-      console.log('Updating location:', { locationId, locationData });
       const response = await apiClient.put(`/location/locations/${locationId}`, locationData);
-      console.log('Location update response:', response.data);
       return response.data as ApiResponse<Location>;
     } catch (error: any) {
-      console.error('Location update error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        locationId,
-        locationData
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to update location');
     }
   }
@@ -164,16 +141,9 @@ export const deleteLocation = createAsyncThunk(
   'locations/deleteLocation',
   async (locationId: string, { rejectWithValue }) => {
     try {
-      console.log('Deleting location:', locationId);
       await apiClient.delete(`/location/locations/${locationId}`);
-      console.log('Location deleted successfully');
       return locationId;
     } catch (error: any) {
-      console.error('Location deletion error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        locationId
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to delete location');
     }
   }

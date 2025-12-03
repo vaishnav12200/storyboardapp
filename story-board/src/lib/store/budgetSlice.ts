@@ -91,16 +91,9 @@ export const fetchBudget = createAsyncThunk(
   'budget/fetchBudget',
   async (projectId: string, { rejectWithValue }) => {
     try {
-      console.log('Fetching budget for project:', projectId);
       const response = await apiClient.get(`/budget/projects/${projectId}`);
-      console.log('Budget fetch response:', response.data);
       return response.data as ApiResponse<Budget>;
     } catch (error: any) {
-      console.error('Budget fetch error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        projectId
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch budget');
     }
   }
@@ -116,17 +109,9 @@ export const createBudgetItem = createAsyncThunk(
     itemData: Omit<BudgetItem, '_id' | 'id' | 'createdAt' | 'updatedAt'>;
   }, { rejectWithValue }) => {
     try {
-      console.log('Creating budget item:', { projectId, itemData });
       const response = await apiClient.post(`/budget/projects/${projectId}/items`, itemData);
-      console.log('Budget item creation response:', response.data);
       return response.data as ApiResponse<BudgetItem>;
     } catch (error: any) {
-      console.error('Budget item creation error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        projectId,
-        itemData
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to create budget item');
     }
   }
@@ -144,18 +129,9 @@ export const updateBudgetItem = createAsyncThunk(
     itemData: Partial<BudgetItem>;
   }, { rejectWithValue }) => {
     try {
-      console.log('Updating budget item:', { projectId, itemId, itemData });
       const response = await apiClient.put(`/budget/projects/${projectId}/items/${itemId}`, itemData);
-      console.log('Budget item update response:', response.data);
       return response.data as ApiResponse<BudgetItem>;
     } catch (error: any) {
-      console.error('Budget item update error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        projectId,
-        itemId,
-        itemData
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to update budget item');
     }
   }
@@ -171,17 +147,9 @@ export const deleteBudgetItem = createAsyncThunk(
     itemId: string;
   }, { rejectWithValue }) => {
     try {
-      console.log('Deleting budget item:', { projectId, itemId });
       await apiClient.delete(`/budget/projects/${projectId}/items/${itemId}`);
-      console.log('Budget item deleted successfully');
       return itemId;
     } catch (error: any) {
-      console.error('Budget item deletion error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        projectId,
-        itemId
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to delete budget item');
     }
   }
@@ -197,17 +165,9 @@ export const updateBudget = createAsyncThunk(
     budgetData: Partial<Budget>;
   }, { rejectWithValue }) => {
     try {
-      console.log('Updating budget:', { projectId, budgetData });
       const response = await apiClient.put(`/budget/projects/${projectId}`, budgetData);
-      console.log('Budget update response:', response.data);
       return response.data as ApiResponse<Budget>;
     } catch (error: any) {
-      console.error('Budget update error:', {
-        error: error.response?.data || error.message,
-        status: error.response?.status,
-        projectId,
-        budgetData
-      });
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to update budget');
     }
   }

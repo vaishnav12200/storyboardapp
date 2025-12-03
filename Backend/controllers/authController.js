@@ -5,12 +5,9 @@ class AuthController {
   // Register new user
   async register(req, res, next) {
     try {
-      console.log('Registration request body:', req.body);
-      
       // Check for validation errors
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        console.log('Validation errors:', errors.array());
         return res.status(400).json({
           success: false,
           message: 'Validation failed',
@@ -52,7 +49,6 @@ class AuthController {
 
       const { email, password, rememberMe } = req.body;
       const result = await authService.login(email, password, rememberMe);
-
       // Set token in cookie
       const cookieExpiry = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
       res.cookie('token', result.data.token, {
