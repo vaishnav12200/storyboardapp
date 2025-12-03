@@ -146,7 +146,18 @@ const connectDB = async () => {
   try {
     console.log('🔍 Connecting to MongoDB...');
     
-    let mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cinecore';
+    // Check both common variable names
+    let mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+    
+    if (!mongoUri) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('❌ FATAL: MongoDB URI is missing! Please set MONGODB_URI or MONGO_URI in Render Environment Variables.');
+        // Don't exit immediately to allow logs to be flushed, but don't try to connect to localhost
+        throw new Error('MongoDB URI is missing in production environment');
+      }
+      console.log('⚠️ MongoDB URI not found, falling back to local database');
+      mongoUri = 'mongodb://127.0.0.1:27017/cinecore';
+    }
     
     // Connect directly to MongoDB Atlas (no fallback to local)
     await mongoose.connect(mongoUri, {
