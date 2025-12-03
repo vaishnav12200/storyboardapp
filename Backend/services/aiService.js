@@ -161,8 +161,6 @@ class AIService {
       }
 
       console.log('🎉 AI generation completed successfully!');
-          break;
-      }
 
       return {
         success: true,
@@ -176,9 +174,13 @@ class AIService {
           generationId: uuidv4(),
           revisedPrompt: result.revisedPrompt || null
         }
-      };success: false,
+      };
+    } catch (error) {
+      console.error('❌ AI generation failed:', error.message);
+      return {
+        success: false,
         message: error.message,
-        provider: options.provider || 'stability'
+        provider: options.provider || 'unknown'
       };
     }
   }
