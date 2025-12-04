@@ -200,20 +200,15 @@ scheduleSchema.virtual('castCount').get(function() {
 });
 
 // Pre-save middleware to calculate duration
-scheduleSchema.pre('save', function(next) {
-  try {
-    if (this.timeSlot && this.timeSlot.startTime && this.timeSlot.endTime) {
-      const start = this.timeSlot.startTime.split(':');
-      const end = this.timeSlot.endTime.split(':');
-      
-      const startMinutes = parseInt(start[0]) * 60 + parseInt(start[1]);
-      const endMinutes = parseInt(end[0]) * 60 + parseInt(end[1]);
-      
-      this.timeSlot.duration = endMinutes - startMinutes;
-    }
-    next();
-  } catch (error) {
-    next(error);
+scheduleSchema.pre('save', async function() {
+  if (this.timeSlot && this.timeSlot.startTime && this.timeSlot.endTime) {
+    const start = this.timeSlot.startTime.split(':');
+    const end = this.timeSlot.endTime.split(':');
+    
+    const startMinutes = parseInt(start[0]) * 60 + parseInt(start[1]);
+    const endMinutes = parseInt(end[0]) * 60 + parseInt(end[1]);
+    
+    this.timeSlot.duration = endMinutes - startMinutes;
   }
 });
 

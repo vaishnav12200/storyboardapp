@@ -243,14 +243,9 @@ budgetSchema.virtual('pendingExpenses').get(function() {
 });
 
 // Pre-save middleware to calculate summaries
-budgetSchema.pre('save', function(next) {
-  try {
-    if (this.settings && this.settings.autoCalculate) {
-      this.calculateSummary();
-    }
-    next();
-  } catch (error) {
-    next(error);
+budgetSchema.pre('save', async function() {
+  if (this.settings && this.settings.autoCalculate) {
+    this.calculateSummary();
   }
 });
 
