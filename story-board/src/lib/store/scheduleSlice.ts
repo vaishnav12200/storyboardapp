@@ -56,19 +56,15 @@ export const createScheduleItem = createAsyncThunk(
     }
   }, { rejectWithValue }) => {
     try {
-      // Transform the data to match backend Schedule model
+      // Send flat data format to match backend validator expectations
       const scheduleData = {
         title: itemData.title,
-        type: itemData.type === 'scene' ? 'shooting' : 'other',
+        type: itemData.type,
         date: itemData.date,
-        timeSlot: {
-          startTime: itemData.startTime,
-          endTime: itemData.endTime,
-          duration: itemData.duration
-        },
-        location: {
-          name: itemData.location
-        },
+        startTime: itemData.startTime,
+        endTime: itemData.endTime,
+        duration: itemData.duration,
+        location: itemData.location,
         description: `${itemData.type} event`,
         status: 'draft',
         priority: 'medium'

@@ -33,27 +33,19 @@ const createScheduleValidation = [
       return true;
     }),
 
-  body('timeSlot.startTime')
-    .optional()
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage('Start time must be in HH:MM format'),
-
   body('startTime')
-    .if((value, { req }) => !req.body.timeSlot || !req.body.timeSlot.startTime)
+    .notEmpty()
+    .withMessage('Start time is required')
     .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
     .withMessage('Start time must be in HH:MM format'),
-
-  body('timeSlot.endTime')
-    .optional()
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage('End time must be in HH:MM format'),
 
   body('endTime')
-    .if((value, { req }) => !req.body.timeSlot || !req.body.timeSlot.endTime)
+    .notEmpty()
+    .withMessage('End time is required')
     .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
     .withMessage('End time must be in HH:MM format')
     .custom((endTime, { req }) => {
-      const startTime = req.body.startTime || (req.body.timeSlot && req.body.timeSlot.startTime);
+      const startTime = req.body.startTime;
       if (startTime && endTime) {
         const start = startTime.split(':').map(Number);
         const end = endTime.split(':').map(Number);
@@ -67,6 +59,26 @@ const createScheduleValidation = [
       }
       return true;
     }),
+
+  body('location')
+    .optional()
+    .isString()
+    .trim(),
+
+  body('duration')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Duration must be a positive integer (minutes)'),
+
+  body('timeSlot.startTime')
+    .optional()
+    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
+    .withMessage('Start time must be in HH:MM format'),
+
+  body('timeSlot.endTime')
+    .optional()
+    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
+    .withMessage('End time must be in HH:MM format'),
 
   body('location.name')
     .optional()

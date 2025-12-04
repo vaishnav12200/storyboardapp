@@ -35,12 +35,18 @@ class ScheduleController {
         });
       }
 
+      // Normalize timeSlot structure FIRST
+      const timeSlot = req.body.timeSlot || {
+        startTime: req.body.startTime,
+        endTime: req.body.endTime
+      };
+
       // Check for scheduling conflicts
       const conflicts = await Schedule.findConflicts(
         projectId,
         req.body.date,
-        req.body.timeSlot.startTime,
-        req.body.timeSlot.endTime
+        timeSlot.startTime,
+        timeSlot.endTime
       );
 
       if (conflicts.length > 0) {
@@ -54,12 +60,6 @@ class ScheduleController {
           }))
         });
       }
-
-      // Normalize timeSlot structure
-      const timeSlot = req.body.timeSlot || {
-        startTime: req.body.startTime,
-        endTime: req.body.endTime
-      };
 
       const scheduleData = {
         ...req.body,
