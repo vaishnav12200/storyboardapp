@@ -149,9 +149,10 @@ const SchedulePage = () => {
         setNewEventEndTime('');
         setNewEventLocation('');
         setShowAddEvent(false);
-      } catch (error) {
-        toast.error(editingEvent ? 'Failed to update event' : 'Failed to add event');
-        console.error('Schedule operation error:', error);
+      } catch (error: any) {
+        const errorMessage = error?.message || error || (editingEvent ? 'Failed to update event' : 'Failed to add event');
+        toast.error(errorMessage);
+        console.error('Schedule operation error:', errorMessage);
       }
     }
   };
