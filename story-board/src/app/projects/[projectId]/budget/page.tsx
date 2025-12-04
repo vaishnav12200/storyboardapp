@@ -230,15 +230,16 @@ const BudgetPage = () => {
     } catch (error: any) {
       let errorMessage = 'Failed to add budget item';
       
+      // Handle different error formats from Redux thunk rejection
       if (typeof error === 'string') {
         errorMessage = error;
       } else if (error?.message && typeof error.message === 'string') {
         errorMessage = error.message;
-      } else if (error?.data?.message && typeof error.data.message === 'string') {
-        errorMessage = error.data.message;
+      } else if (error?.error && typeof error.error === 'string') {
+        errorMessage = error.error;
       }
       
-      toast.error(errorMessage);
+      toast.error(String(errorMessage));
     }
   };
 

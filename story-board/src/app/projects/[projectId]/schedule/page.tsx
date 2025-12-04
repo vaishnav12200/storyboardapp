@@ -113,17 +113,24 @@ const SchedulePage = () => {
       const endDateTime = new Date(`${newEventDate} ${newEventEndTime}`);
       const duration = Math.round((endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60)); // duration in minutes
 
+      // Map frontend event types to backend enum values
+      const typeMap: Record<string, string> = {
+        'scene': 'shooting',
+        'setup': 'pre-production',
+        'break': 'other',
+        'meeting': 'meeting',
+        'travel': 'other',
+        'wrap': 'post-production'
+      };
+
       const eventData = {
         title: newEventTitle.trim(),
-        type: newEventType === 'scene' ? 'shooting' : newEventType,
+        type: typeMap[newEventType] || 'other',
         date: newEventDate,
-        timeSlot: {
-          startTime: newEventStartTime,
-          endTime: newEventEndTime
-        },
-        location: {
-          name: newEventLocation.trim() || 'TBD'
-        }
+        startTime: newEventStartTime,
+        endTime: newEventEndTime,
+        duration: duration,
+        location: newEventLocation.trim() || 'TBD'
       };
 
       try {
@@ -155,17 +162,16 @@ const SchedulePage = () => {
       } catch (error: any) {
         let errorMessage = editingEvent ? 'Failed to update event' : 'Failed to add event';
         
+        // Handle different error formats from Redux thunk rejection
         if (typeof error === 'string') {
           errorMessage = error;
         } else if (error?.message && typeof error.message === 'string') {
           errorMessage = error.message;
-        } else if (error?.data?.message && typeof error.data.message === 'string') {
-          errorMessage = error.data.message;
-        } else if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
-          errorMessage = error.errors.map((e: any) => e.msg || e.message).join(', ');
+        } else if (error?.error && typeof error.error === 'string') {
+          errorMessage = error.error;
         }
         
-        toast.error(errorMessage);
+        toast.error(String(errorMessage));
       }
     }
   };
