@@ -153,9 +153,19 @@ const SchedulePage = () => {
         setNewEventLocation('');
         setShowAddEvent(false);
       } catch (error: any) {
-        const errorMessage = error?.message || error || (editingEvent ? 'Failed to update event' : 'Failed to add event');
+        let errorMessage = editingEvent ? 'Failed to update event' : 'Failed to add event';
+        
+        if (typeof error === 'string') {
+          errorMessage = error;
+        } else if (error?.message && typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (error?.data?.message && typeof error.data.message === 'string') {
+          errorMessage = error.data.message;
+        } else if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+          errorMessage = error.errors.map((e: any) => e.msg || e.message).join(', ');
+        }
+        
         toast.error(errorMessage);
-        console.error('Schedule operation error:', errorMessage);
       }
     }
   };
