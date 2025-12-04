@@ -805,14 +805,26 @@ class BudgetController {
           title: `${project.title} Budget`,
           currency: 'USD',
           totalBudget: 0,
-          createdBy: req.user.userId
+          categories: [
+            { name: 'pre-production', budgeted: 0, spent: 0 },
+            { name: 'cast', budgeted: 0, spent: 0 },
+            { name: 'crew', budgeted: 0, spent: 0 },
+            { name: 'equipment', budgeted: 0, spent: 0 },
+            { name: 'location', budgeted: 0, spent: 0 },
+            { name: 'post-production', budgeted: 0, spent: 0 },
+            { name: 'other', budgeted: 0, spent: 0 }
+          ],
+          createdBy: req.user.userId,
+          status: 'active'
         });
+        await budget.save();
       }
 
       const expenseData = {
         ...req.body,
         createdBy: req.user.userId,
-        date: req.body.date || new Date()
+        date: req.body.date || new Date(),
+        status: req.body.status || 'planned'
       };
 
       budget.expenses.push(expenseData);
@@ -822,13 +834,14 @@ class BudgetController {
 
       res.status(201).json({
         success: true,
-        message: 'Expense added successfully',
+        message: 'Budget item added successfully',
         data: addedExpense
       });
     } catch (error) {
+      console.error('Add expense error:', error);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: error.message || 'Failed to add expense'
       });
     }
   }

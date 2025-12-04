@@ -77,9 +77,10 @@ class ScheduleController {
         data: schedule
       });
     } catch (error) {
+      console.error('Schedule creation error:', error);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: error.message || 'Failed to create schedule'
       });
     }
   }
