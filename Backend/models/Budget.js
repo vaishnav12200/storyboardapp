@@ -244,10 +244,14 @@ budgetSchema.virtual('pendingExpenses').get(function() {
 
 // Pre-save middleware to calculate summaries
 budgetSchema.pre('save', function(next) {
-  if (this.settings.autoCalculate) {
-    this.calculateSummary();
+  try {
+    if (this.settings && this.settings.autoCalculate) {
+      this.calculateSummary();
+    }
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 });
 
 // Instance method to calculate budget summary
