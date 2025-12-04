@@ -115,12 +115,15 @@ const SchedulePage = () => {
 
       const eventData = {
         title: newEventTitle.trim(),
-        type: newEventType,
+        type: newEventType === 'scene' ? 'shooting' : newEventType,
         date: newEventDate,
-        startTime: newEventStartTime,
-        endTime: newEventEndTime,
-        duration,
-        location: newEventLocation.trim() || 'TBD',
+        timeSlot: {
+          startTime: newEventStartTime,
+          endTime: newEventEndTime
+        },
+        location: {
+          name: newEventLocation.trim() || 'TBD'
+        }
       };
 
       try {

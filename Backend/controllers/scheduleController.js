@@ -55,8 +55,15 @@ class ScheduleController {
         });
       }
 
+      // Normalize timeSlot structure
+      const timeSlot = req.body.timeSlot || {
+        startTime: req.body.startTime,
+        endTime: req.body.endTime
+      };
+
       const scheduleData = {
         ...req.body,
+        timeSlot,
         project: projectId,
         createdBy: req.user.userId
       };

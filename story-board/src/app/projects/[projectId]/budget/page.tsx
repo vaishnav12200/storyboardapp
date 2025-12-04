@@ -228,9 +228,17 @@ const BudgetPage = () => {
       setShowAddExpense(false);
       toast.success('Budget item added successfully!');
     } catch (error: any) {
-      const errorMessage = error?.message || error || 'Failed to add budget item';
+      let errorMessage = 'Failed to add budget item';
+      
+      if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error?.message && typeof error.message === 'string') {
+        errorMessage = error.message;
+      } else if (error?.data?.message && typeof error.data.message === 'string') {
+        errorMessage = error.data.message;
+      }
+      
       toast.error(errorMessage);
-      console.error('Budget add error:', errorMessage);
     }
   };
 
